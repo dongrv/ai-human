@@ -56,6 +56,26 @@ fn ask_uses_mock_agent_response_from_env() {
 }
 
 #[test]
+fn ask_rejects_unknown_openai_wire_api() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env("AI_HUMAN_OPENAI_WIRE_API", "legacy")
+        .args([
+            "ask",
+            "--project-root",
+            temp.path().to_str().unwrap(),
+            "--input",
+            "what should I verify?",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("AI_HUMAN_OPENAI_WIRE_API"))
+        .stderr(predicate::str::contains("responses"))
+        .stderr(predicate::str::contains("chat-completions"));
+}
+
+#[test]
 fn plan_uses_mock_agent_and_prints_report_path() {
     let temp = assert_fs::TempDir::new().unwrap();
     let mut cmd = Command::cargo_bin("ai-human").unwrap();

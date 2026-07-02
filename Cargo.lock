@@ -19,6 +19,7 @@ dependencies = [
  "assert_cmd",
  "assert_fs",
  "async-trait",
+ "bytes",
  "chrono",
  "clap",
  "insta",

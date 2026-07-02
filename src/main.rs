@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use clap::Parser;
 
 use ai_human::agent::mock::MockAgentClient;
-use ai_human::agent::rig_client::RigAgentClient;
+use ai_human::agent::rig_client::{OpenAiWireApi, RigAgentClient};
 use ai_human::agent::AgentClient;
 use ai_human::cli::{Cli, Command};
 use ai_human::workflow::ask::AskWorkflow;
@@ -25,13 +25,13 @@ async fn main() -> Result<()> {
             println!("ai-human project initialized");
         }
         Command::Ask(args) => {
-            let answer = AskWorkflow::new(args.project_root, agent_from_env())
+            let answer = AskWorkflow::new(args.project_root, agent_from_env()?)
                 .run(&args.input)
                 .await?;
             println!("{answer}");
         }
         Command::Plan(args) => {
-            let report = PlanWorkflow::new(args.project_root, agent_from_env())
+            let report = PlanWorkflow::new(args.project_root, agent_from_env()?)
                 .run(&args.input)
                 .await?;
             println!("{}", report.markdown);
@@ -43,14 +43,14 @@ async fn main() -> Result<()> {
                 input.push_str(&format!("\nPATH: {}", path.display()));
             }
 
-            let report = ImpactWorkflow::new(args.project_root, agent_from_env())
+            let report = ImpactWorkflow::new(args.project_root, agent_from_env()?)
                 .run(&input)
                 .await?;
             println!("{}", report.markdown);
             println!("Report written to {}", report.path);
         }
         Command::Review(args) => {
-            let workflow = ReviewWorkflow::new(args.project_root, agent_from_env());
+            let workflow = ReviewWorkflow::new(args.project_root, agent_from_env()?);
             let report = match (args.diff_file, args.path) {
                 (Some(diff_file), None) => workflow.run_diff_file(diff_file).await?,
                 (None, Some(path)) => workflow.run_path(path).await?,
@@ -65,12 +65,20 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn agent_from_env() -> Box<dyn AgentClient> {
+fn agent_from_env() -> Result<Box<dyn AgentClient>> {
     if let Ok(response) = std::env::var("AI_HUMAN_MOCK_RESPONSE") {
-        return Box::new(MockAgentClient::new(vec![response]));
+        return Ok(Box::new(MockAgentClient::new(vec![response])));
     }
 
     let provider = std::env::var("AI_HUMAN_MODEL_PROVIDER").unwrap_or_else(|_| "openai".into());
     let model = std::env::var("AI_HUMAN_MODEL").unwrap_or_else(|_| "gpt-4o-mini".into());
-    Box::new(RigAgentClient::new(provider, model))
+    let openai_wire_api = std::env::var("AI_HUMAN_OPENAI_WIRE_API")
+        .map(|value| OpenAiWireApi::parse(&value))
+        .unwrap_or_else(|_| Ok(OpenAiWireApi::default()))?;
+
+    Ok(Box::new(RigAgentClient::with_openai_wire_api(
+        provider,
+        model,
+        openai_wire_api,
+    )))
 }

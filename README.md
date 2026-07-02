@@ -32,11 +32,20 @@ Set model credentials for real model calls:
 
 ```powershell
 $env:OPENAI_API_KEY="your-key"
+$env:OPENAI_BASE_URL="http://your-openai-compatible-proxy/v1"
 $env:AI_HUMAN_MODEL_PROVIDER="openai"
 $env:AI_HUMAN_MODEL="gpt-4o-mini"
+$env:AI_HUMAN_OPENAI_WIRE_API="responses"
 ```
 
 In non-mock mode, AI Human sends the user input and loaded local project context to the configured model provider. Review provider policies and avoid sending sensitive project context to providers that are not approved for that data.
+The OpenAI provider uses rig's Responses API client by default. Set `AI_HUMAN_OPENAI_WIRE_API` to `responses` for `/responses` proxies, or `chat-completions` for `/chat/completions` proxies. `OPENAI_BASE_URL` is used as the exact API root before the endpoint path, so use `http://host:port` when the proxy serves `/responses`, or `http://host:port/v1` when it serves `/v1/responses`.
+
+Some OpenAI-compatible Responses proxies omit fields that rig currently requires on response output items, such as `output[].id` or `output[].status`. AI Human normalizes those missing fields before rig parses the response. To inspect the raw provider response during troubleshooting, set:
+
+```powershell
+$env:AI_HUMAN_OPENAI_DEBUG_RAW="1"
+```
 
 For deterministic local no-network CLI checks without a model call, provide one JSON response:
 
