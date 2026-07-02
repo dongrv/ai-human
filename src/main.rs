@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 
 use ai_human::cli::{Cli, Command};
+use ai_human::workflow::init::InitWorkflow;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -12,8 +13,9 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Init(_) => {
-            println!("init workflow is not wired yet");
+        Command::Init(args) => {
+            InitWorkflow::new(args.project_root).run().await?;
+            println!("ai-human project initialized");
         }
         Command::Ask(_) => {
             println!("ask workflow is not wired yet");
