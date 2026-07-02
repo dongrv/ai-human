@@ -102,6 +102,29 @@ async fn skips_symlinked_path_hints() {
 }
 
 #[tokio::test]
+async fn skips_files_reached_through_symlinked_parent_directories() {
+    let project = assert_fs::TempDir::new().unwrap();
+    let outside = assert_fs::TempDir::new().unwrap();
+    outside
+        .child("secret.md")
+        .write_str("symlinked parent secret")
+        .unwrap();
+
+    let link_path = project.path().join("linked-dir");
+    if create_dir_symlink(outside.path(), &link_path).is_err() {
+        return;
+    }
+
+    let context = ContextLoader::new(project.path().to_path_buf())
+        .load_for_input("inspect linked-dir/secret.md")
+        .await
+        .unwrap();
+
+    assert!(!context.combined_text.contains("symlinked parent secret"));
+    assert!(!context.sources.contains(&"linked-dir/secret.md".into()));
+}
+
+#[tokio::test]
 async fn rejects_lexical_parent_traversal_path_hints() {
     let project = assert_fs::TempDir::new().unwrap();
     let outside = assert_fs::TempDir::new().unwrap();
@@ -131,10 +154,26 @@ fn create_file_symlink(
     std::os::unix::fs::symlink(target, link)
 }
 
+#[cfg(unix)]
+fn create_dir_symlink(
+    target: impl AsRef<std::path::Path>,
+    link: impl AsRef<std::path::Path>,
+) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
 #[cfg(windows)]
 fn create_file_symlink(
     target: impl AsRef<std::path::Path>,
     link: impl AsRef<std::path::Path>,
 ) -> std::io::Result<()> {
     std::os::windows::fs::symlink_file(target, link)
+}
+
+#[cfg(windows)]
+fn create_dir_symlink(
+    target: impl AsRef<std::path::Path>,
+    link: impl AsRef<std::path::Path>,
+) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_dir(target, link)
 }

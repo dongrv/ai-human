@@ -30,6 +30,7 @@ pub mod loader {
         }
 
         pub async fn load_for_input(&self, input: &str) -> Result<LoadedContext> {
+            let canonical_root = fs::canonicalize(&self.project_root).await?;
             let mut candidates = vec![
                 self.project_root.join("AGENTS.md"),
                 self.project_root.join("README.md"),
@@ -71,7 +72,16 @@ pub mod loader {
                     continue;
                 }
 
-                let Ok(text) = fs::read_to_string(&path).await else {
+                let canonical_path = match fs::canonicalize(&path).await {
+                    Ok(path) => path,
+                    Err(error) if error.kind() == ErrorKind::NotFound => continue,
+                    Err(error) => return Err(error.into()),
+                };
+                if !canonical_path.starts_with(&canonical_root) {
+                    continue;
+                }
+
+                let Ok(text) = fs::read_to_string(&canonical_path).await else {
                     continue;
                 };
                 sources.push(source.clone());
