@@ -36,7 +36,9 @@ $env:AI_HUMAN_MODEL_PROVIDER="openai"
 $env:AI_HUMAN_MODEL="gpt-4o-mini"
 ```
 
-For deterministic local CLI checks without a model call, provide one JSON response:
+In non-mock mode, AI Human sends the user input and loaded local project context to the configured model provider. Review provider policies and avoid sending sensitive project context to providers that are not approved for that data.
+
+For deterministic local no-network CLI checks without a model call, provide one JSON response:
 
 ```powershell
 $env:AI_HUMAN_MOCK_RESPONSE='{"title":"Mock Plan","goal":"Verify CLI wiring","non_goals":["No model call"],"affected_areas":["cli"],"risks":["Mock only"],"verification_plan":["cargo test"],"open_questions":[]}'
@@ -78,4 +80,4 @@ The review workflow returns Markdown and writes a report ending in `-review.md`.
 
 ## Safety Boundary
 
-The MVP does not auto-commit, push, deploy, mutate production config, delete project files, or run external side effects. Local write workflows are limited to explicit workflow outputs such as `.ai-human/` initialization and generated reports, with policy types in place for future controlled execution.
+The MVP does not perform non-model operational side effects such as auto-commit, push, deploy, production config mutation, file deletion, or database changes. Real model calls are external provider actions and may transmit prompt context as described above. Local write workflows are limited to explicit workflow outputs such as `.ai-human/` initialization and generated reports, with policy types in place for future controlled execution.
