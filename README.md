@@ -77,6 +77,8 @@ cargo run -- review --path service/pay/audit.go
 ```
 
 The review workflow returns Markdown and writes a report ending in `-review.md`.
+Both `--diff-file` and `--path` must point to regular files inside `--project-root`.
+Review findings are also appended to `.ai-human/memory/reviews.jsonl`.
 
 ## Safety Boundary
 

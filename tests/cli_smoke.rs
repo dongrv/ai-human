@@ -159,6 +159,29 @@ fn review_accepts_path_and_prints_report_path() {
 }
 
 #[test]
+fn review_errors_when_path_is_missing() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"summary":"unused","findings":[],"test_gaps":[],"residual_risks":[]}"#,
+    )
+    .args([
+        "review",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--path",
+        "missing.rs",
+    ])
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains(
+        "path must reference an existing project file",
+    ));
+}
+
+#[test]
 fn review_errors_when_both_diff_file_and_path_are_provided() {
     let temp = assert_fs::TempDir::new().unwrap();
     temp.child("change.diff")

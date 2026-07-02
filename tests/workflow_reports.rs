@@ -1,10 +1,13 @@
 use assert_fs::prelude::*;
 
 use ai_human::agent::mock::MockAgentClient;
+use ai_human::agent::{AgentClient, AgentRequest};
 use ai_human::workflow::ask::AskWorkflow;
 use ai_human::workflow::impact::ImpactWorkflow;
 use ai_human::workflow::plan::PlanWorkflow;
 use ai_human::workflow::review::ReviewWorkflow;
+use async_trait::async_trait;
+use std::sync::{Arc, Mutex};
 
 #[tokio::test]
 async fn ask_workflow_returns_plain_answer() {
@@ -147,6 +150,64 @@ async fn review_workflow_writes_markdown_report_from_diff_file() {
 }
 
 #[tokio::test]
+async fn review_workflow_appends_findings_to_reviews_memory() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("change.diff")
+        .write_str("diff --git a/service/pay/audit.go b/service/pay/audit.go")
+        .unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "summary":"One persistence risk found",
+        "findings":[{
+            "severity":"P1",
+            "file":"service/pay/audit.go",
+            "line":42,
+            "issue":"Audit state is not persisted after mutation",
+            "suggestion":"Persist audit state before returning success"
+        }],
+        "test_gaps":[],
+        "residual_risks":[]
+    }"#
+    .into()]);
+
+    ReviewWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run_diff_file(temp.path().join("change.diff"))
+        .await
+        .unwrap();
+
+    let reviews = tokio::fs::read_to_string(temp.path().join(".ai-human/memory/reviews.jsonl"))
+        .await
+        .unwrap();
+
+    assert!(reviews.contains(r#""severity":"P1""#));
+    assert!(reviews.contains(r#""issue":"Audit state is not persisted after mutation""#));
+}
+
+#[tokio::test]
+async fn review_workflow_rejects_diff_file_outside_project_root() {
+    let project = assert_fs::TempDir::new().unwrap();
+    let outside = assert_fs::TempDir::new().unwrap();
+    outside
+        .child("change.diff")
+        .write_str("secret diff")
+        .unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "summary":"unused",
+        "findings":[],
+        "test_gaps":[],
+        "residual_risks":[]
+    }"#
+    .into()]);
+
+    let error = ReviewWorkflow::new(project.path().to_path_buf(), Box::new(agent))
+        .run_diff_file(outside.path().join("change.diff"))
+        .await
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("path must stay inside project root"));
+}
+
+#[tokio::test]
 async fn review_workflow_writes_markdown_report_from_text() {
     let temp = assert_fs::TempDir::new().unwrap();
     let agent = MockAgentClient::new(vec![r#"{
@@ -165,4 +226,67 @@ async fn review_workflow_writes_markdown_report_from_text() {
     assert!(report.markdown.contains("No findings"));
     assert!(report.path.ends_with("-review.md"));
     temp.child(&report.path).assert(report.markdown.as_str());
+}
+
+#[tokio::test]
+async fn review_workflow_reads_file_content_from_path() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("src/lib.rs")
+        .write_str("pub fn reviewed_symbol() {}")
+        .unwrap();
+    let captured = Arc::new(Mutex::new(None));
+    let agent = RecordingAgentClient {
+        captured: Arc::clone(&captured),
+        response: r#"{
+            "summary":"No findings",
+            "findings":[],
+            "test_gaps":[],
+            "residual_risks":[]
+        }"#
+        .into(),
+    };
+
+    ReviewWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run_path("src/lib.rs".into())
+        .await
+        .unwrap();
+
+    let request = captured.lock().unwrap().clone().unwrap();
+
+    assert!(request.user_prompt.contains("FILE: src/lib.rs"));
+    assert!(request.user_prompt.contains("pub fn reviewed_symbol() {}"));
+}
+
+#[tokio::test]
+async fn review_workflow_rejects_missing_path_before_model_call() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "summary":"unused",
+        "findings":[],
+        "test_gaps":[],
+        "residual_risks":[]
+    }"#
+    .into()]);
+
+    let error = ReviewWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run_path("missing.rs".into())
+        .await
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("path must reference an existing project file"));
+}
+
+#[derive(Debug)]
+struct RecordingAgentClient {
+    captured: Arc<Mutex<Option<AgentRequest>>>,
+    response: String,
+}
+
+#[async_trait]
+impl AgentClient for RecordingAgentClient {
+    async fn complete(&self, request: AgentRequest) -> anyhow::Result<String> {
+        *self.captured.lock().unwrap() = Some(request);
+        Ok(self.response.clone())
+    }
 }

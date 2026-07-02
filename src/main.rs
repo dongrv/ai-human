@@ -53,11 +53,7 @@ async fn main() -> Result<()> {
             let workflow = ReviewWorkflow::new(args.project_root, agent_from_env());
             let report = match (args.diff_file, args.path) {
                 (Some(diff_file), None) => workflow.run_diff_file(diff_file).await?,
-                (None, Some(path)) => {
-                    workflow
-                        .run_text(&format!("REVIEW FILE: {}", path.display()))
-                        .await?
-                }
+                (None, Some(path)) => workflow.run_path(path).await?,
                 (Some(_), Some(_)) => bail!("use either --diff-file or --path, not both"),
                 (None, None) => bail!("review requires --diff-file or --path"),
             };

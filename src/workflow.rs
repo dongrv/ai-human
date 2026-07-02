@@ -204,14 +204,17 @@ Return only JSON matching this schema:
 }
 
 pub mod review {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
-    use anyhow::Result;
+    use anyhow::{bail, Context, Result};
     use tokio::fs;
+    use uuid::Uuid;
 
     use crate::agent::{AgentClient, AgentRequest};
     use crate::context::loader::ContextLoader;
     use crate::core::report::ReviewOutput;
+    use crate::core::task::ReviewRecord;
+    use crate::memory::jsonl::JsonlMemoryStore;
     use crate::report::markdown::render_review;
     use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
 
@@ -229,12 +232,15 @@ pub mod review {
         }
 
         pub async fn run_diff_file(&self, diff_file: PathBuf) -> Result<WorkflowReport> {
-            let diff_text = fs::read_to_string(&diff_file).await?;
-            self.run_text(&format!(
-                "DIFF FILE: {}\n\n{diff_text}",
-                diff_file.display()
-            ))
-            .await
+            let (source, diff_text) = read_project_file(&self.project_root, &diff_file).await?;
+            self.run_text(&format!("DIFF FILE: {source}\n\n{diff_text}",))
+                .await
+        }
+
+        pub async fn run_path(&self, path: PathBuf) -> Result<WorkflowReport> {
+            let (source, contents) = read_project_file(&self.project_root, &path).await?;
+            self.run_text(&format!("FILE: {source}\n\n{contents}"))
+                .await
         }
 
         pub async fn run_text(&self, review_input: &str) -> Result<WorkflowReport> {
@@ -254,6 +260,7 @@ pub mod review {
             let markdown = render_review(&output);
             let path = report_path(&self.project_root, "review");
             write_report(&path, &markdown).await?;
+            append_review_findings(&self.project_root, &output).await?;
 
             Ok(WorkflowReport {
                 path: report_display_path(&self.project_root, &path),
@@ -278,6 +285,78 @@ Return only JSON matching this schema:
   "residual_risks": ["risks that remain after review"]
 }
 "#;
+
+    async fn read_project_file(
+        project_root: &Path,
+        requested_path: &Path,
+    ) -> Result<(String, String)> {
+        let canonical_root = fs::canonicalize(project_root)
+            .await
+            .with_context(|| format!("project root does not exist: {}", project_root.display()))?;
+        let path = if requested_path.is_absolute() {
+            requested_path.to_path_buf()
+        } else {
+            project_root.join(requested_path)
+        };
+
+        let metadata = fs::symlink_metadata(&path).await.with_context(|| {
+            format!(
+                "path must reference an existing project file: {}",
+                requested_path.display()
+            )
+        })?;
+        let file_type = metadata.file_type();
+        if file_type.is_symlink() || !file_type.is_file() {
+            bail!(
+                "path must reference a regular project file: {}",
+                requested_path.display()
+            );
+        }
+
+        let canonical_path = fs::canonicalize(&path).await.with_context(|| {
+            format!(
+                "path must reference an existing project file: {}",
+                requested_path.display()
+            )
+        })?;
+        if !canonical_path.starts_with(&canonical_root) {
+            bail!(
+                "path must stay inside project root: {}",
+                requested_path.display()
+            );
+        }
+
+        let display_path = canonical_path
+            .strip_prefix(&canonical_root)
+            .unwrap_or(&canonical_path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let text = fs::read_to_string(&canonical_path)
+            .await
+            .with_context(|| format!("path must be readable UTF-8 text: {display_path}"))?;
+
+        Ok((display_path, text))
+    }
+
+    async fn append_review_findings(project_root: &Path, output: &ReviewOutput) -> Result<()> {
+        let task_id = format!("review-{}", Uuid::new_v4());
+        let store = JsonlMemoryStore::new(project_root.join(".ai-human/memory"));
+
+        for finding in &output.findings {
+            store
+                .append_review(&ReviewRecord {
+                    task_id: task_id.clone(),
+                    severity: finding.severity.clone(),
+                    file: finding.file.clone(),
+                    line: finding.line,
+                    issue: finding.issue.clone(),
+                    suggestion: finding.suggestion.clone(),
+                })
+                .await?;
+        }
+
+        Ok(())
+    }
 }
 
 pub mod init {
