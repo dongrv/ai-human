@@ -37,6 +37,8 @@ async fn init_creates_ai_human_layout() {
         .assert(predicate::path::is_dir());
     temp.child(".ai-human/templates")
         .assert(predicate::path::is_dir());
+    temp.child(".ai-human/knowledge/cases")
+        .assert(predicate::path::is_dir());
 }
 
 #[tokio::test]

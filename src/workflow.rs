@@ -20,11 +20,14 @@ pub mod init {
             let root = self.project_root.join(".ai-human");
             let knowledge = root.join("knowledge");
             let workflows = knowledge.join("workflows");
+            let cases = knowledge.join("cases");
             let memory = root.join("memory");
             let reports = root.join("reports");
             let templates = root.join("templates");
 
-            for dir in [&root, &knowledge, &workflows, &memory, &reports, &templates] {
+            for dir in [
+                &root, &knowledge, &workflows, &cases, &memory, &reports, &templates,
+            ] {
                 fs::create_dir_all(dir).await?;
             }
 
