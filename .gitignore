@@ -1,1 +1,4 @@
 /target/
+.ai-human/memory/
+.ai-human/reports/
+.env
