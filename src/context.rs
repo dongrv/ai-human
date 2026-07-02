@@ -1,5 +1,6 @@
 pub mod loader {
     use std::collections::HashSet;
+    use std::io::ErrorKind;
     use std::path::{Component, Path, PathBuf};
 
     use anyhow::Result;
@@ -52,12 +53,21 @@ pub mod loader {
 
             for path in candidates {
                 let source = normalize_path(&self.project_root, &path);
-                if !seen.insert(source.clone()) || !fs::try_exists(&path).await? {
+                if !seen.insert(source.clone()) {
                     continue;
                 }
 
-                let metadata = fs::metadata(&path).await?;
-                if !metadata.is_file() || metadata.len() > self.max_file_bytes {
+                let metadata = match fs::symlink_metadata(&path).await {
+                    Ok(metadata) => metadata,
+                    Err(error) if error.kind() == ErrorKind::NotFound => continue,
+                    Err(error) => return Err(error.into()),
+                };
+
+                let file_type = metadata.file_type();
+                if file_type.is_symlink()
+                    || !file_type.is_file()
+                    || metadata.len() > self.max_file_bytes
+                {
                     continue;
                 }
 

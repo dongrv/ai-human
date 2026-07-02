@@ -77,3 +77,64 @@ async fn skips_missing_files_and_files_over_the_size_limit() {
     assert!(!context.combined_text.contains(&"x".repeat(1024)));
     assert_eq!(context.sources, vec!["README.md"]);
 }
+
+#[tokio::test]
+async fn skips_symlinked_path_hints() {
+    let project = assert_fs::TempDir::new().unwrap();
+    let outside = assert_fs::TempDir::new().unwrap();
+    outside
+        .child("secret.md")
+        .write_str("outside project secret")
+        .unwrap();
+
+    let link_path = project.path().join("linked-secret.md");
+    if create_file_symlink(outside.path().join("secret.md"), &link_path).is_err() {
+        return;
+    }
+
+    let context = ContextLoader::new(project.path().to_path_buf())
+        .load_for_input("inspect linked-secret.md")
+        .await
+        .unwrap();
+
+    assert!(!context.combined_text.contains("outside project secret"));
+    assert!(!context.sources.contains(&"linked-secret.md".into()));
+}
+
+#[tokio::test]
+async fn rejects_lexical_parent_traversal_path_hints() {
+    let project = assert_fs::TempDir::new().unwrap();
+    let outside = assert_fs::TempDir::new().unwrap();
+    outside
+        .child("outside.md")
+        .write_str("parent traversal secret")
+        .unwrap();
+
+    let input = format!(
+        "inspect ../{}/outside.md",
+        outside.path().file_name().unwrap().to_string_lossy()
+    );
+    let context = ContextLoader::new(project.path().to_path_buf())
+        .load_for_input(&input)
+        .await
+        .unwrap();
+
+    assert!(!context.combined_text.contains("parent traversal secret"));
+    assert!(context.sources.is_empty());
+}
+
+#[cfg(unix)]
+fn create_file_symlink(
+    target: impl AsRef<std::path::Path>,
+    link: impl AsRef<std::path::Path>,
+) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn create_file_symlink(
+    target: impl AsRef<std::path::Path>,
+    link: impl AsRef<std::path::Path>,
+) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_file(target, link)
+}
