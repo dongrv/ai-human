@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use chrono::Utc;
-use tokio::fs;
+use tokio::fs::{self, OpenOptions};
+use tokio::io::AsyncWriteExt;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowReport {
@@ -11,11 +13,12 @@ pub struct WorkflowReport {
 }
 
 fn report_path(project_root: &Path, task_suffix: &str) -> PathBuf {
-    let date = Utc::now().format("%Y-%m-%d").to_string();
+    let timestamp = Utc::now().format("%Y%m%dT%H%M%S%.9fZ");
+    let id = Uuid::new_v4();
     project_root
         .join(".ai-human")
         .join("reports")
-        .join(format!("{date}-{task_suffix}.md"))
+        .join(format!("{timestamp}-{id}-{task_suffix}.md"))
 }
 
 fn report_display_path(project_root: &Path, path: &Path) -> String {
@@ -29,7 +32,13 @@ async fn write_report(path: &Path, markdown: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).await?;
     }
-    fs::write(path, markdown).await?;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .await?;
+    file.write_all(markdown.as_bytes()).await?;
+    file.flush().await?;
     Ok(())
 }
 

@@ -51,6 +51,45 @@ async fn plan_workflow_writes_markdown_report() {
 }
 
 #[tokio::test]
+async fn repeated_plan_runs_create_distinct_reports_without_overwriting() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let agent = MockAgentClient::new(vec![
+        r#"{
+        "title":"First plan",
+        "goal":"Write the first report",
+        "non_goals":[],
+        "affected_areas":[],
+        "risks":[],
+        "verification_plan":["cargo test"],
+        "open_questions":[]
+    }"#
+        .into(),
+        r#"{
+        "title":"Second plan",
+        "goal":"Write the second report",
+        "non_goals":[],
+        "affected_areas":[],
+        "risks":[],
+        "verification_plan":["cargo test"],
+        "open_questions":[]
+    }"#
+        .into(),
+    ]);
+    let workflow = PlanWorkflow::new(temp.path().to_path_buf(), Box::new(agent));
+
+    let first = workflow.run("write first report").await.unwrap();
+    let second = workflow.run("write second report").await.unwrap();
+
+    assert_ne!(first.path, second.path);
+    assert!(first.path.ends_with("-plan.md"));
+    assert!(second.path.ends_with("-plan.md"));
+    temp.child(&first.path).assert(first.markdown.as_str());
+    temp.child(&second.path).assert(second.markdown.as_str());
+    assert!(first.markdown.contains("# First plan"));
+    assert!(second.markdown.contains("# Second plan"));
+}
+
+#[tokio::test]
 async fn impact_workflow_writes_markdown_report() {
     let temp = assert_fs::TempDir::new().unwrap();
     let agent = MockAgentClient::new(vec![r#"{
