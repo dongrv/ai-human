@@ -28,15 +28,17 @@ cargo run -- ask --input "Which modules own payment audit rules?"
 
 ## Model Environment Variables
 
-Set model credentials for real model calls:
+Copy `.env.example` to `.env` and fill in local model credentials:
 
-```powershell
-$env:OPENAI_API_KEY="your-key"
-$env:OPENAI_BASE_URL="http://your-openai-compatible-proxy/v1"
-$env:AI_HUMAN_MODEL_PROVIDER="openai"
-$env:AI_HUMAN_MODEL="gpt-4o-mini"
-$env:AI_HUMAN_OPENAI_WIRE_API="responses"
+```dotenv
+OPENAI_API_KEY=your-key
+OPENAI_BASE_URL=http://your-openai-compatible-proxy/v1
+AI_HUMAN_MODEL_PROVIDER=openai
+AI_HUMAN_MODEL=gpt-4o-mini
+AI_HUMAN_OPENAI_WIRE_API=responses
 ```
+
+CLI commands load `.env` from `--project-root` before reading model configuration. Existing shell environment variables take precedence over `.env` values.
 
 In non-mock mode, AI Human sends the user input and loaded local project context to the configured model provider. Review provider policies and avoid sending sensitive project context to providers that are not approved for that data.
 The OpenAI provider uses rig's Responses API client by default. Set `AI_HUMAN_OPENAI_WIRE_API` to `responses` for `/responses` proxies, or `chat-completions` for `/chat/completions` proxies. `OPENAI_BASE_URL` is used as the exact API root before the endpoint path, so use `http://host:port` when the proxy serves `/responses`, or `http://host:port/v1` when it serves `/v1/responses`.

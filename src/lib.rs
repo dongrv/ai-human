@@ -3,6 +3,7 @@ pub mod cli;
 pub mod config;
 pub mod context;
 pub mod core;
+pub mod env;
 pub mod memory;
 pub mod policy;
 pub mod report;

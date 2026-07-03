@@ -5,6 +5,7 @@ use ai_human::agent::mock::MockAgentClient;
 use ai_human::agent::rig_client::{OpenAiWireApi, RigAgentClient};
 use ai_human::agent::AgentClient;
 use ai_human::cli::{Cli, Command};
+use ai_human::env::load_project_env;
 use ai_human::workflow::ask::AskWorkflow;
 use ai_human::workflow::impact::ImpactWorkflow;
 use ai_human::workflow::init::InitWorkflow;
@@ -21,16 +22,19 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Command::Init(args) => {
+            load_project_env(&args.project_root)?;
             InitWorkflow::new(args.project_root).run().await?;
             println!("ai-human project initialized");
         }
         Command::Ask(args) => {
+            load_project_env(&args.project_root)?;
             let answer = AskWorkflow::new(args.project_root, agent_from_env()?)
                 .run(&args.input)
                 .await?;
             println!("{answer}");
         }
         Command::Plan(args) => {
+            load_project_env(&args.project_root)?;
             let report = PlanWorkflow::new(args.project_root, agent_from_env()?)
                 .run(&args.input)
                 .await?;
@@ -38,6 +42,7 @@ async fn main() -> Result<()> {
             println!("Report written to {}", report.path);
         }
         Command::Impact(args) => {
+            load_project_env(&args.project_root)?;
             let mut input = args.input;
             if let Some(path) = args.path {
                 input.push_str(&format!("\nPATH: {}", path.display()));
@@ -50,6 +55,7 @@ async fn main() -> Result<()> {
             println!("Report written to {}", report.path);
         }
         Command::Review(args) => {
+            load_project_env(&args.project_root)?;
             let workflow = ReviewWorkflow::new(args.project_root, agent_from_env()?);
             let report = match (args.diff_file, args.path) {
                 (Some(diff_file), None) => workflow.run_diff_file(diff_file).await?,
