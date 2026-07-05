@@ -11,7 +11,8 @@ AI Human is a Rust rig-powered CLI digital human for service-side engineering wo
 - Produce impact analysis reports with files, call chains, protocol risks, state risks, persistence risks, and test entrypoints.
 - Produce code review reports from diffs or file references.
 - Capture reusable engineering learnings into Markdown knowledge and JSONL memory.
-- Render plan, impact, review, and learning outputs as Markdown reports under `.ai-human/reports/`.
+- Preview and apply one-file local fixes with explicit `--apply`.
+- Render plan, impact, review, learning, and fix outputs as Markdown reports under `.ai-human/reports/`.
 
 ## Quick Start
 
@@ -37,6 +38,12 @@ Preview a small local fix without changing source files:
 
 ```powershell
 cargo run -- fix --input "Fix missing nil guard in payment audit parser" --path service/pay/audit.go
+```
+
+Apply a reviewed one-file fix:
+
+```powershell
+cargo run -- fix --input "Fix missing nil guard in payment audit parser" --path service/pay/audit.go --apply --verify "go test ./service/pay"
 ```
 
 ## Model Environment Variables
@@ -120,7 +127,7 @@ cargo run -- learn --input "Turn this review into a reusable rule" --source-repo
 
 The learn workflow prints the learning report, writes a report ending in `-learn.md`, appends Markdown to `.ai-human/knowledge/engineering-rules.md` by default, and appends structured memory to `.ai-human/memory/learnings.jsonl`. Source code files are not modified by `learn`.
 
-## Fix Dry Run Example
+## Fix Example
 
 Preview a bounded fix plan for one target file:
 
@@ -134,8 +141,16 @@ Include verification and formatting commands for the model to consider:
 cargo run -- fix --input "Fix missing nil guard in payment audit parser" --path service/pay/audit.go --verify "go test ./service/pay" --format "gofmt -w service/pay/audit.go"
 ```
 
-The fix workflow is dry-run by default in Phase 2B. It reads the target file, prints a `# Fix Dry Run` report, writes a report ending in `-fix-dry-run.md`, and explicitly reports `Source code files modified: no`. `fix --apply` is reserved for Phase 2C.
+The fix workflow is dry-run by default. It reads the target file, prints a `# Fix Dry Run` report, writes a report ending in `-fix-dry-run.md`, and explicitly reports `Source code files modified: no`.
+
+Apply a bounded replacement after reviewing the dry-run plan:
+
+```powershell
+cargo run -- fix --input "Fix missing nil guard in payment audit parser" --path service/pay/audit.go --apply --verify "go test ./service/pay"
+```
+
+`fix --apply` writes only the file named by `--path`, only when the model returns a matching replacement for that exact file. Verification and formatting commands are executed only when supplied by CLI flags, not because the model suggested them. Apply mode prints a `# Fix Apply Report`, writes a report ending in `-fix-apply.md`, lists written files, and includes command results.
 
 ## Safety Boundary
 
-AI Human does not perform non-model operational side effects such as auto-commit, push, deploy, production config mutation, file deletion, or database changes. Real model calls are external provider actions and may transmit prompt context as described above. Local write workflows are limited to explicit workflow outputs such as `.ai-human/` initialization, generated reports, knowledge files, and memory files, with policy types in place for future controlled execution.
+AI Human does not perform non-model operational side effects such as auto-commit, push, deploy, production config mutation, file deletion, or database changes. Real model calls are external provider actions and may transmit prompt context as described above. Local write workflows are limited to explicit workflow outputs such as `.ai-human/` initialization, generated reports, knowledge files, memory files, and `fix --apply` writes to one explicit project file.

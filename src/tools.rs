@@ -61,6 +61,45 @@ pub mod fs {
         }
 
         pub async fn append_text(&self, relative_path: &Path, contents: &str) -> Result<String> {
+            let path = self.prepare_write_path(relative_path).await?;
+
+            let mut file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .await?;
+            file.write_all(contents.as_bytes()).await?;
+            file.flush().await?;
+
+            Ok(relative_path.to_string_lossy().replace('\\', "/"))
+        }
+
+        pub async fn write_text(&self, relative_path: &Path, contents: &str) -> Result<String> {
+            let path = self.prepare_write_path(relative_path).await?;
+
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&path)
+                .await?;
+            file.write_all(contents.as_bytes()).await?;
+            file.flush().await?;
+
+            Ok(relative_path.to_string_lossy().replace('\\', "/"))
+        }
+
+        async fn canonical_root(&self) -> Result<PathBuf> {
+            fs::create_dir_all(&self.project_root).await?;
+            fs::canonicalize(&self.project_root).await.with_context(|| {
+                format!(
+                    "project root does not exist: {}",
+                    self.project_root.display()
+                )
+            })
+        }
+
+        async fn prepare_write_path(&self, relative_path: &Path) -> Result<PathBuf> {
             validate_safe_relative_path(relative_path)?;
 
             let canonical_root = self.canonical_root().await?;
@@ -76,7 +115,7 @@ pub mod fs {
                 let file_type = metadata.file_type();
                 if file_type.is_symlink() || !file_type.is_file() {
                     bail!(
-                        "path must reference a regular project file for append: {}",
+                        "path must reference a regular project file for write: {}",
                         relative_path.display()
                     );
                 }
@@ -97,25 +136,7 @@ pub mod fs {
                 }
             }
 
-            let mut file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&path)
-                .await?;
-            file.write_all(contents.as_bytes()).await?;
-            file.flush().await?;
-
-            Ok(relative_path.to_string_lossy().replace('\\', "/"))
-        }
-
-        async fn canonical_root(&self) -> Result<PathBuf> {
-            fs::create_dir_all(&self.project_root).await?;
-            fs::canonicalize(&self.project_root).await.with_context(|| {
-                format!(
-                    "project root does not exist: {}",
-                    self.project_root.display()
-                )
-            })
+            Ok(path)
         }
     }
 
@@ -150,5 +171,71 @@ pub mod fs {
             .unwrap_or(path)
             .to_string_lossy()
             .replace('\\', "/")
+    }
+}
+
+pub mod command {
+    use std::path::PathBuf;
+    use std::time::Instant;
+
+    use anyhow::Result;
+    use tokio::process::Command;
+
+    #[derive(Debug, Clone)]
+    pub struct CommandRunner {
+        project_root: PathBuf,
+    }
+
+    impl CommandRunner {
+        pub fn new(project_root: impl Into<PathBuf>) -> Self {
+            Self {
+                project_root: project_root.into(),
+            }
+        }
+
+        pub async fn run(&self, command: &str) -> Result<CommandResult> {
+            let start = Instant::now();
+            let output = shell_command(command)
+                .current_dir(&self.project_root)
+                .output()
+                .await?;
+            let duration_ms = start.elapsed().as_millis() as u64;
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            let exit_code = output.status.code();
+
+            Ok(CommandResult {
+                command: command.into(),
+                exit_code,
+                succeeded: output.status.success(),
+                stdout,
+                stderr,
+                duration_ms,
+            })
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct CommandResult {
+        pub command: String,
+        pub exit_code: Option<i32>,
+        pub succeeded: bool,
+        pub stdout: String,
+        pub stderr: String,
+        pub duration_ms: u64,
+    }
+
+    #[cfg(windows)]
+    fn shell_command(command: &str) -> Command {
+        let mut shell = Command::new("cmd");
+        shell.arg("/C").arg(command);
+        shell
+    }
+
+    #[cfg(not(windows))]
+    fn shell_command(command: &str) -> Command {
+        let mut shell = Command::new("sh");
+        shell.arg("-c").arg(command);
+        shell
     }
 }

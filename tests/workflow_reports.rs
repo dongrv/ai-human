@@ -467,6 +467,83 @@ async fn fix_workflow_rejects_missing_target_file_before_model_call() {
 }
 
 #[tokio::test]
+async fn fix_apply_writes_replacement_and_delivery_report() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("src/lib.rs")
+        .write_str("pub fn value() -> i32 { 1 }\n")
+        .unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "summary":"Return updated value.",
+        "target_files":["src/lib.rs"],
+        "change_intent":"Change the returned value.",
+        "risk_level":"low",
+        "risks":["Manual review still needed"],
+        "verification_commands":[],
+        "replacement_files":[{"path":"src/lib.rs","contents":"pub fn value() -> i32 { 2 }\n"}],
+        "open_questions":[]
+    }"#
+    .into()]);
+
+    let report = FixWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run_apply(FixRequest {
+            input: "Change value to two".into(),
+            path: "src/lib.rs".into(),
+            verify_commands: vec!["cargo --version".into()],
+            format_command: None,
+        })
+        .await
+        .unwrap();
+
+    let target = tokio::fs::read_to_string(temp.path().join("src/lib.rs"))
+        .await
+        .unwrap();
+
+    assert_eq!(target, "pub fn value() -> i32 { 2 }\n");
+    assert!(report.markdown.contains("# Fix Apply Report"));
+    assert!(report.markdown.contains("Source code files modified: yes"));
+    assert!(report.markdown.contains("cargo --version"));
+    assert!(report.path.ends_with("-fix-apply.md"));
+    temp.child(&report.path).assert(report.markdown.as_str());
+}
+
+#[tokio::test]
+async fn fix_apply_rejects_replacement_for_different_path() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("src/lib.rs")
+        .write_str("pub fn value() -> i32 { 1 }\n")
+        .unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "summary":"Return updated value.",
+        "target_files":["src/lib.rs"],
+        "change_intent":"Change the returned value.",
+        "risk_level":"low",
+        "risks":[],
+        "verification_commands":[],
+        "replacement_files":[{"path":"src/other.rs","contents":"pub fn value() -> i32 { 2 }\n"}],
+        "open_questions":[]
+    }"#
+    .into()]);
+
+    let error = FixWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run_apply(FixRequest {
+            input: "Change value to two".into(),
+            path: "src/lib.rs".into(),
+            verify_commands: vec![],
+            format_command: None,
+        })
+        .await
+        .unwrap_err()
+        .to_string();
+
+    let target = tokio::fs::read_to_string(temp.path().join("src/lib.rs"))
+        .await
+        .unwrap();
+
+    assert_eq!(target, "pub fn value() -> i32 { 1 }\n");
+    assert!(error.contains("model replacement must target exactly src/lib.rs"));
+}
+
+#[tokio::test]
 async fn review_workflow_reads_file_content_from_path() {
     let temp = assert_fs::TempDir::new().unwrap();
     temp.child("src/lib.rs")

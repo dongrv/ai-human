@@ -1,6 +1,6 @@
 pub mod markdown {
     use crate::core::report::{
-        FixPlanOutput, ImpactOutput, LearningOutput, PlanOutput, ReviewOutput,
+        FixApplyOutput, FixPlanOutput, ImpactOutput, LearningOutput, PlanOutput, ReviewOutput,
     };
 
     pub fn render_plan(output: &PlanOutput) -> String {
@@ -105,6 +105,21 @@ pub mod markdown {
         md
     }
 
+    pub fn render_fix_apply(output: &FixApplyOutput) -> String {
+        let mut md = String::new();
+
+        md.push_str("# Fix Apply Report\n\n");
+        md.push_str("## Summary\n\n");
+        md.push_str(&format!("{}\n\n", output.summary));
+        md.push_str("## Result\n\n");
+        md.push_str("- Source code files modified: yes\n\n");
+        push_list(&mut md, "Written Files", &output.written_files);
+        push_verification_results(&mut md, output);
+        push_list(&mut md, "Residual Risks", &output.residual_risks);
+
+        md
+    }
+
     fn push_replacement_files(md: &mut String, output: &FixPlanOutput) {
         md.push_str("## Proposed Replacement Files\n\n");
         if output.replacement_files.is_empty() {
@@ -114,6 +129,39 @@ pub mod markdown {
 
         for file in &output.replacement_files {
             md.push_str(&format!("- `{}`\n", file.path));
+        }
+        md.push('\n');
+    }
+
+    fn push_verification_results(md: &mut String, output: &FixApplyOutput) {
+        md.push_str("## Verification Results\n\n");
+        if output.verification_results.is_empty() {
+            md.push_str("- None.\n\n");
+            return;
+        }
+
+        for result in &output.verification_results {
+            let status = if result.succeeded {
+                "succeeded"
+            } else {
+                "failed"
+            };
+            md.push_str(&format!(
+                "- `{}`: {} (exit: {}, {} ms)\n",
+                result.command,
+                status,
+                result
+                    .exit_code
+                    .map(|code| code.to_string())
+                    .unwrap_or_else(|| "terminated".into()),
+                result.duration_ms
+            ));
+            if !result.stdout.trim().is_empty() {
+                md.push_str(&format!("  - stdout: {}\n", one_line(&result.stdout)));
+            }
+            if !result.stderr.trim().is_empty() {
+                md.push_str(&format!("  - stderr: {}\n", one_line(&result.stderr)));
+            }
         }
         md.push('\n');
     }
@@ -129,5 +177,14 @@ pub mod markdown {
             md.push_str(&format!("- {value}\n"));
         }
         md.push('\n');
+    }
+
+    fn one_line(value: &str) -> String {
+        let text = value.split_whitespace().collect::<Vec<_>>().join(" ");
+        if text.len() > 240 {
+            format!("{}...", &text[..240])
+        } else {
+            text
+        }
     }
 }

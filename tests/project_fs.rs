@@ -51,3 +51,29 @@ async fn read_text_rejects_absolute_path_outside_project_root() {
 
     assert!(error.contains("path must stay inside project root"));
 }
+
+#[tokio::test]
+async fn write_text_replaces_existing_project_file() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("src/lib.rs").write_str("old").unwrap();
+    let fs = ProjectFs::new(temp.path());
+
+    let display_path = fs.write_text(Path::new("src/lib.rs"), "new").await.unwrap();
+
+    assert_eq!(display_path, "src/lib.rs");
+    temp.child("src/lib.rs").assert("new");
+}
+
+#[tokio::test]
+async fn write_text_rejects_parent_traversal() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let fs = ProjectFs::new(temp.path());
+
+    let error = fs
+        .write_text(Path::new("../outside.rs"), "new")
+        .await
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("path must stay inside project root"));
+}

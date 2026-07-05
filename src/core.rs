@@ -124,6 +124,24 @@ pub mod report {
         pub replacement_files: Vec<FixReplacementFile>,
         pub open_questions: Vec<String>,
     }
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct VerificationResult {
+        pub command: String,
+        pub exit_code: Option<i32>,
+        pub succeeded: bool,
+        pub stdout: String,
+        pub stderr: String,
+        pub duration_ms: u64,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct FixApplyOutput {
+        pub summary: String,
+        pub written_files: Vec<String>,
+        pub verification_results: Vec<VerificationResult>,
+        pub residual_risks: Vec<String>,
+    }
 }
 
 pub mod task {

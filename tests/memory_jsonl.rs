@@ -2,15 +2,15 @@ use chrono::Utc;
 use serde_json::Value;
 
 use ai_human::core::report::{
-    FixPlanOutput, FixReplacementFile, ImpactOutput, LearningOutput, PlanOutput, ReviewFinding,
-    ReviewOutput,
+    FixApplyOutput, FixPlanOutput, FixReplacementFile, ImpactOutput, LearningOutput, PlanOutput,
+    ReviewFinding, ReviewOutput, VerificationResult,
 };
 use ai_human::core::task::{
     DecisionRecord, LearningRecord, ReviewRecord, TaskRecord, TaskStatus, TaskType,
 };
 use ai_human::memory::jsonl::JsonlMemoryStore;
 use ai_human::report::markdown::{
-    render_fix_plan, render_impact, render_learning, render_plan, render_review,
+    render_fix_apply, render_fix_plan, render_impact, render_learning, render_plan, render_review,
 };
 
 #[tokio::test]
@@ -212,6 +212,29 @@ fn renders_fix_plan_output_as_dry_run_markdown() {
     assert!(markdown.contains("## Target Files\n\n- service/pay/audit.go\n\n"));
     assert!(markdown.contains("- Source code files modified: no\n"));
     assert!(markdown.contains("## Verification Commands\n\n- go test ./service/pay\n\n"));
+}
+
+#[test]
+fn renders_fix_apply_output_as_delivery_markdown() {
+    let markdown = render_fix_apply(&FixApplyOutput {
+        summary: "Applied nil guard.".into(),
+        written_files: vec!["service/pay/audit.go".into()],
+        verification_results: vec![VerificationResult {
+            command: "cargo --version".into(),
+            exit_code: Some(0),
+            succeeded: true,
+            stdout: "cargo 1.78".into(),
+            stderr: "".into(),
+            duration_ms: 10,
+        }],
+        residual_risks: vec!["Manual business review still needed".into()],
+    });
+
+    assert!(markdown.starts_with("# Fix Apply Report\n\n"));
+    assert!(markdown.contains("- Source code files modified: yes\n"));
+    assert!(markdown.contains("- service/pay/audit.go\n"));
+    assert!(markdown.contains("cargo --version"));
+    assert!(markdown.contains("succeeded"));
 }
 
 fn task_record(task_id: &str, summary: &str) -> TaskRecord {

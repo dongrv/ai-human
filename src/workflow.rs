@@ -206,12 +206,13 @@ Return only JSON matching this schema:
 pub mod fix {
     use std::path::PathBuf;
 
-    use anyhow::Result;
+    use anyhow::{bail, Result};
 
     use crate::agent::{AgentClient, AgentRequest};
     use crate::context::loader::ContextLoader;
-    use crate::core::report::FixPlanOutput;
-    use crate::report::markdown::render_fix_plan;
+    use crate::core::report::{FixApplyOutput, FixPlanOutput, VerificationResult};
+    use crate::report::markdown::{render_fix_apply, render_fix_plan};
+    use crate::tools::command::{CommandResult, CommandRunner};
     use crate::tools::fs::ProjectFs;
     use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
 
@@ -237,13 +238,47 @@ pub mod fix {
         }
 
         pub async fn run_dry_run(&self, request: FixRequest) -> Result<WorkflowReport> {
+            let output = self.build_plan(&request).await?;
+            let markdown = render_fix_plan(&output);
+            let path = report_path(&self.project_root, "fix-dry-run");
+            write_report(&path, &markdown).await?;
+
+            Ok(WorkflowReport {
+                path: report_display_path(&self.project_root, &path),
+                markdown,
+            })
+        }
+
+        pub async fn run_apply(&self, request: FixRequest) -> Result<WorkflowReport> {
+            let output = self.build_plan(&request).await?;
+            let replacement = replacement_for_requested_path(&output, &request)?;
+            let fs = ProjectFs::new(self.project_root.clone());
+            let written_path = fs.write_text(&request.path, &replacement.contents).await?;
+            let verification_results = self.run_requested_commands(&request).await?;
+            let apply_output = FixApplyOutput {
+                summary: output.summary.clone(),
+                written_files: vec![written_path],
+                verification_results,
+                residual_risks: output.risks.clone(),
+            };
+            let markdown = render_fix_apply(&apply_output);
+            let path = report_path(&self.project_root, "fix-apply");
+            write_report(&path, &markdown).await?;
+
+            Ok(WorkflowReport {
+                path: report_display_path(&self.project_root, &path),
+                markdown,
+            })
+        }
+
+        async fn build_plan(&self, request: &FixRequest) -> Result<FixPlanOutput> {
             let fs = ProjectFs::new(self.project_root.clone());
             let target_file = fs.read_text(&request.path).await?;
             let context = ContextLoader::new(self.project_root.clone())
                 .load_for_input(&request.input)
                 .await?;
-            let output: FixPlanOutput = self
-                .agent
+
+            self.agent
                 .complete_json(AgentRequest {
                     system_prompt: FIX_SYSTEM_PROMPT.into(),
                     user_prompt: format!(
@@ -256,15 +291,53 @@ pub mod fix {
                         context.combined_text
                     ),
                 })
-                .await?;
-            let markdown = render_fix_plan(&output);
-            let path = report_path(&self.project_root, "fix-dry-run");
-            write_report(&path, &markdown).await?;
+                .await
+        }
 
-            Ok(WorkflowReport {
-                path: report_display_path(&self.project_root, &path),
-                markdown,
-            })
+        async fn run_requested_commands(
+            &self,
+            request: &FixRequest,
+        ) -> Result<Vec<VerificationResult>> {
+            let runner = CommandRunner::new(self.project_root.clone());
+            let mut results = Vec::new();
+
+            if let Some(command) = &request.format_command {
+                results.push(command_result_to_verification(runner.run(command).await?));
+            }
+            for command in &request.verify_commands {
+                results.push(command_result_to_verification(runner.run(command).await?));
+            }
+
+            Ok(results)
+        }
+    }
+
+    fn replacement_for_requested_path<'a>(
+        output: &'a FixPlanOutput,
+        request: &FixRequest,
+    ) -> Result<&'a crate::core::report::FixReplacementFile> {
+        let requested_path = request.path.to_string_lossy().replace('\\', "/");
+        let matches = output
+            .replacement_files
+            .iter()
+            .filter(|file| file.path.replace('\\', "/") == requested_path)
+            .collect::<Vec<_>>();
+
+        if matches.len() != 1 {
+            bail!("model replacement must target exactly {requested_path}");
+        }
+
+        Ok(matches[0])
+    }
+
+    fn command_result_to_verification(result: CommandResult) -> VerificationResult {
+        VerificationResult {
+            command: result.command,
+            exit_code: result.exit_code,
+            succeeded: result.succeeded,
+            stdout: result.stdout,
+            stderr: result.stderr,
+            duration_ms: result.duration_ms,
         }
     }
 

@@ -338,29 +338,34 @@ fn fix_uses_mock_agent_and_prints_dry_run_report() {
 }
 
 #[test]
-fn fix_apply_is_reserved_for_later_phase() {
+fn fix_apply_uses_mock_agent_and_modifies_target_file() {
     let temp = assert_fs::TempDir::new().unwrap();
-    temp.child("service/pay/audit.go")
-        .write_str("package pay\n\nfunc Audit() {}\n")
+    temp.child("src/lib.rs")
+        .write_str("pub fn value() -> i32 { 1 }\n")
         .unwrap();
     let mut cmd = Command::cargo_bin("ai-human").unwrap();
 
     cmd.env(
         "AI_HUMAN_MOCK_RESPONSE",
-        r#"{"summary":"unused","target_files":[],"change_intent":"unused","risk_level":"low","risks":[],"verification_commands":[],"replacement_files":[],"open_questions":[]}"#,
+        r#"{"summary":"Return updated value.","target_files":["src/lib.rs"],"change_intent":"Change the returned value.","risk_level":"low","risks":[],"verification_commands":[],"replacement_files":[{"path":"src/lib.rs","contents":"pub fn value() -> i32 { 2 }\n"}],"open_questions":[]}"#,
     )
     .args([
         "fix",
         "--project-root",
         temp.path().to_str().unwrap(),
         "--input",
-        "Fix missing nil guard",
+        "Change value to two",
         "--path",
-        "service/pay/audit.go",
+        "src/lib.rs",
         "--apply",
     ])
     .assert()
-    .failure()
-    .stderr(predicate::str::contains("fix --apply is reserved for Phase 2C"))
-    .stderr(predicate::str::contains("run without --apply"));
+    .success()
+    .stdout(predicate::str::contains("# Fix Apply Report"))
+    .stdout(predicate::str::contains("Source code files modified: yes"))
+    .stdout(predicate::str::contains("Report written to "))
+    .stdout(predicate::str::contains("-fix-apply.md"));
+
+    temp.child("src/lib.rs")
+        .assert("pub fn value() -> i32 { 2 }\n");
 }

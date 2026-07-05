@@ -82,21 +82,20 @@ async fn main() -> Result<()> {
             println!("Report written to {}", report.path);
         }
         Command::Fix(args) => {
-            if args.apply {
-                bail!(
-                    "fix --apply is reserved for Phase 2C; run without --apply to review the dry-run plan first."
-                );
-            }
-
             load_project_env(&args.project_root)?;
-            let report = FixWorkflow::new(args.project_root, agent_from_env()?)
-                .run_dry_run(FixRequest {
-                    input: args.input,
-                    path: args.path,
-                    verify_commands: args.verify,
-                    format_command: args.format,
-                })
-                .await?;
+            let apply = args.apply;
+            let request = FixRequest {
+                input: args.input,
+                path: args.path,
+                verify_commands: args.verify,
+                format_command: args.format,
+            };
+            let workflow = FixWorkflow::new(args.project_root, agent_from_env()?);
+            let report = if apply {
+                workflow.run_apply(request).await?
+            } else {
+                workflow.run_dry_run(request).await?
+            };
             println!("{}", report.markdown);
             println!("Report written to {}", report.path);
         }
