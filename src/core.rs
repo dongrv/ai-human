@@ -95,6 +95,17 @@ pub mod report {
         pub test_gaps: Vec<String>,
         pub residual_risks: Vec<String>,
     }
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct LearningOutput {
+        pub title: String,
+        pub category: String,
+        pub summary: String,
+        pub rule: String,
+        pub evidence: Vec<String>,
+        pub applies_to: Vec<String>,
+        pub target_doc: String,
+    }
 }
 
 pub mod task {
@@ -147,5 +158,15 @@ pub mod task {
         pub line: Option<u32>,
         pub issue: String,
         pub suggestion: String,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct LearningRecord {
+        pub task_id: String,
+        pub category: String,
+        pub title: String,
+        pub learning: String,
+        pub target_doc: String,
+        pub evidence: Vec<String>,
     }
 }

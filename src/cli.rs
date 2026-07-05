@@ -17,6 +17,7 @@ pub enum Command {
     Plan(TextInputArgs),
     Impact(ImpactArgs),
     Review(ReviewArgs),
+    Learn(LearnArgs),
 }
 
 #[derive(Debug, Args)]
@@ -56,4 +57,36 @@ pub struct ReviewArgs {
 
     #[arg(long)]
     pub path: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct LearnArgs {
+    #[arg(
+        long,
+        default_value = ".",
+        help = "Project root that owns .ai-human state"
+    )]
+    pub project_root: PathBuf,
+
+    #[arg(long, help = "Lesson, conclusion, review finding, or rule to save")]
+    pub input: String,
+
+    #[arg(
+        long,
+        default_value = "rule",
+        help = "Learning category, for example rule, faq, case, decision, or pitfall"
+    )]
+    pub category: String,
+
+    #[arg(
+        long,
+        help = "Knowledge target, for example engineering-rules, faq, or case"
+    )]
+    pub target: Option<String>,
+
+    #[arg(
+        long,
+        help = "Optional .ai-human report file to include as source material"
+    )]
+    pub source_report: Option<PathBuf>,
 }

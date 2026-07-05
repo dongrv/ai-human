@@ -7,4 +7,5 @@ pub mod env;
 pub mod memory;
 pub mod policy;
 pub mod report;
+pub mod tools;
 pub mod workflow;

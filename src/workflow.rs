@@ -203,6 +203,162 @@ Return only JSON matching this schema:
 "#;
 }
 
+pub mod learn {
+    use std::path::{Path, PathBuf};
+
+    use anyhow::{bail, Result};
+    use uuid::Uuid;
+
+    use crate::agent::{AgentClient, AgentRequest};
+    use crate::context::loader::ContextLoader;
+    use crate::core::report::LearningOutput;
+    use crate::core::task::LearningRecord;
+    use crate::memory::jsonl::JsonlMemoryStore;
+    use crate::report::markdown::render_learning;
+    use crate::tools::fs::ProjectFs;
+    use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct LearnRequest {
+        pub input: String,
+        pub category: String,
+        pub target: Option<String>,
+        pub source_report: Option<PathBuf>,
+    }
+
+    pub struct LearnWorkflow {
+        project_root: PathBuf,
+        agent: Box<dyn AgentClient>,
+    }
+
+    impl LearnWorkflow {
+        pub fn new(project_root: PathBuf, agent: Box<dyn AgentClient>) -> Self {
+            Self {
+                project_root,
+                agent,
+            }
+        }
+
+        pub async fn run(&self, request: LearnRequest) -> Result<WorkflowReport> {
+            let fs = ProjectFs::new(self.project_root.clone());
+            let source_report = match &request.source_report {
+                Some(path) => Some(fs.read_text(path).await?),
+                None => None,
+            };
+            let context = ContextLoader::new(self.project_root.clone())
+                .load_for_input(&request.input)
+                .await?;
+            let source_prompt = source_report
+                .as_ref()
+                .map(|file| format!("SOURCE REPORT: {}\n\n{}", file.display_path, file.text))
+                .unwrap_or_else(|| "SOURCE REPORT: none".into());
+            let target_hint = request.target.as_deref().unwrap_or("auto");
+
+            let output: LearningOutput = self
+                .agent
+                .complete_json(AgentRequest {
+                    system_prompt: LEARN_SYSTEM_PROMPT.into(),
+                    user_prompt: format!(
+                        "INPUT:\n{}\n\nCATEGORY:\n{}\n\nTARGET HINT:\n{}\n\n{}\n\nCONTEXT:\n{}",
+                        request.input,
+                        request.category,
+                        target_hint,
+                        source_prompt,
+                        context.combined_text
+                    ),
+                })
+                .await?;
+
+            let target_doc =
+                learning_target_doc(request.target.as_deref(), &request.category, &output)?;
+            let entry = render_learning(&output);
+            let knowledge_path = fs
+                .append_text(Path::new(target_doc), &format!("\n\n{entry}"))
+                .await?;
+            let memory_path = ".ai-human/memory/learnings.jsonl";
+            append_learning_record(&self.project_root, &output, &knowledge_path).await?;
+
+            let mut markdown = entry;
+            markdown.push_str("## Saved\n\n");
+            markdown.push_str(&format!("- Knowledge written to {knowledge_path}\n"));
+            markdown.push_str(&format!("- Memory written to {memory_path}\n"));
+            markdown.push_str("- Source code files modified: no\n\n");
+            markdown.push_str("## Next\n\n");
+            markdown.push_str("- Review the Markdown entry before treating it as a team rule.\n");
+            markdown.push_str("- Re-run related `ask`, `plan`, `impact`, or `review` commands to reuse this knowledge.\n");
+
+            let path = report_path(&self.project_root, "learn");
+            write_report(&path, &markdown).await?;
+
+            Ok(WorkflowReport {
+                path: report_display_path(&self.project_root, &path),
+                markdown,
+            })
+        }
+    }
+
+    fn learning_target_doc(
+        requested_target: Option<&str>,
+        category: &str,
+        output: &LearningOutput,
+    ) -> Result<&'static str> {
+        let raw = requested_target
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| {
+                let suggested = output.target_doc.trim();
+                if suggested.is_empty() {
+                    None
+                } else {
+                    Some(suggested)
+                }
+            })
+            .unwrap_or(category);
+        let normalized = raw.trim().to_ascii_lowercase().replace('_', "-");
+
+        match normalized.as_str() {
+            "engineering-rules" | "engineering-rule" | "rules" | "rule" | "decision"
+            | "decisions" | "pitfall" | "pitfalls" => Ok(".ai-human/knowledge/engineering-rules.md"),
+            "faq" | "question" | "questions" => Ok(".ai-human/knowledge/faq.md"),
+            "case" | "cases" => Ok(".ai-human/knowledge/cases/learned-cases.md"),
+            _ => bail!(
+                "unknown learning target `{raw}`. Use --target engineering-rules, --target faq, or --target case."
+            ),
+        }
+    }
+
+    async fn append_learning_record(
+        project_root: &Path,
+        output: &LearningOutput,
+        knowledge_path: &str,
+    ) -> Result<()> {
+        let store = JsonlMemoryStore::new(project_root.join(".ai-human/memory"));
+        store
+            .append_learning(&LearningRecord {
+                task_id: format!("learn-{}", Uuid::new_v4()),
+                category: output.category.clone(),
+                title: output.title.clone(),
+                learning: output.rule.clone(),
+                target_doc: knowledge_path.into(),
+                evidence: output.evidence.clone(),
+            })
+            .await
+    }
+
+    const LEARN_SYSTEM_PROMPT: &str = r#"You are AI Digital Human V1, a service-side engineering knowledge curator.
+Turn the supplied input into concise, reusable, reviewable project knowledge.
+Return only JSON matching this schema:
+{
+  "title": "short learning title",
+  "category": "rule|faq|case|decision|pitfall",
+  "summary": "one or two sentence summary",
+  "rule": "the reusable lesson or rule",
+  "evidence": ["source facts that support the learning"],
+  "applies_to": ["modules, files, services, workflows, or situations"],
+  "target_doc": "engineering-rules|faq|case"
+}
+"#;
+}
+
 pub mod review {
     use std::path::{Path, PathBuf};
 

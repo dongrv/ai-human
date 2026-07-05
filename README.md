@@ -1,6 +1,6 @@
 # AI Human
 
-AI Human is a Rust rig-powered CLI digital human for service-side engineering workflows. The MVP focuses on initializing project knowledge, loading local context, and producing structured engineering reports.
+AI Human is a Rust rig-powered CLI digital human for service-side engineering workflows. It focuses on initializing project knowledge, loading local context, producing structured engineering reports, and preserving reusable team knowledge.
 
 ## MVP Capabilities
 
@@ -10,7 +10,8 @@ AI Human is a Rust rig-powered CLI digital human for service-side engineering wo
 - Produce structured requirement plans with goals, non-goals, affected areas, risks, verification steps, and open questions.
 - Produce impact analysis reports with files, call chains, protocol risks, state risks, persistence risks, and test entrypoints.
 - Produce code review reports from diffs or file references.
-- Render plan, impact, and review outputs as Markdown reports under `.ai-human/reports/`.
+- Capture reusable engineering learnings into Markdown knowledge and JSONL memory.
+- Render plan, impact, review, and learning outputs as Markdown reports under `.ai-human/reports/`.
 
 ## Quick Start
 
@@ -24,6 +25,12 @@ Ask a context-aware engineering question:
 
 ```powershell
 cargo run -- ask --input "Which modules own payment audit rules?"
+```
+
+Save a reusable engineering lesson:
+
+```powershell
+cargo run -- learn --input "Payment audit rules are owned by service/pay and must persist before success."
 ```
 
 ## Model Environment Variables
@@ -91,6 +98,22 @@ The review workflow returns Markdown and writes a report ending in `-review.md`.
 Both `--diff-file` and `--path` must point to regular files inside `--project-root`.
 Review findings are also appended to `.ai-human/memory/reviews.jsonl`.
 
+## Learn Example
+
+Save a rule with friendly defaults:
+
+```powershell
+cargo run -- learn --input "Payment audit rules are owned by service/pay and must persist before success."
+```
+
+Save a lesson from an existing report:
+
+```powershell
+cargo run -- learn --input "Turn this review into a reusable rule" --source-report .ai-human/reports/example-review.md
+```
+
+The learn workflow prints the learning report, writes a report ending in `-learn.md`, appends Markdown to `.ai-human/knowledge/engineering-rules.md` by default, and appends structured memory to `.ai-human/memory/learnings.jsonl`. Source code files are not modified by `learn`.
+
 ## Safety Boundary
 
-The MVP does not perform non-model operational side effects such as auto-commit, push, deploy, production config mutation, file deletion, or database changes. Real model calls are external provider actions and may transmit prompt context as described above. Local write workflows are limited to explicit workflow outputs such as `.ai-human/` initialization and generated reports, with policy types in place for future controlled execution.
+AI Human does not perform non-model operational side effects such as auto-commit, push, deploy, production config mutation, file deletion, or database changes. Real model calls are external provider actions and may transmit prompt context as described above. Local write workflows are limited to explicit workflow outputs such as `.ai-human/` initialization, generated reports, knowledge files, and memory files, with policy types in place for future controlled execution.

@@ -1,5 +1,5 @@
 pub mod markdown {
-    use crate::core::report::{ImpactOutput, PlanOutput, ReviewOutput};
+    use crate::core::report::{ImpactOutput, LearningOutput, PlanOutput, ReviewOutput};
 
     pub fn render_plan(output: &PlanOutput) -> String {
         let mut md = String::new();
@@ -55,6 +55,22 @@ pub mod markdown {
         }
         push_list(&mut md, "Test Gaps", &output.test_gaps);
         push_list(&mut md, "Residual Risks", &output.residual_risks);
+
+        md
+    }
+
+    pub fn render_learning(output: &LearningOutput) -> String {
+        let mut md = String::new();
+
+        md.push_str(&format!("# {}\n\n", output.title));
+        md.push_str("## Category\n\n");
+        md.push_str(&format!("{}\n\n", output.category));
+        md.push_str("## Summary\n\n");
+        md.push_str(&format!("{}\n\n", output.summary));
+        md.push_str("## Rule\n\n");
+        md.push_str(&format!("{}\n\n", output.rule));
+        push_list(&mut md, "Evidence", &output.evidence);
+        push_list(&mut md, "Applies To", &output.applies_to);
 
         md
     }

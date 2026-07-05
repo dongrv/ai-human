@@ -9,6 +9,7 @@ use ai_human::env::load_project_env;
 use ai_human::workflow::ask::AskWorkflow;
 use ai_human::workflow::impact::ImpactWorkflow;
 use ai_human::workflow::init::InitWorkflow;
+use ai_human::workflow::learn::{LearnRequest, LearnWorkflow};
 use ai_human::workflow::plan::PlanWorkflow;
 use ai_human::workflow::review::ReviewWorkflow;
 
@@ -63,6 +64,19 @@ async fn main() -> Result<()> {
                 (Some(_), Some(_)) => bail!("use either --diff-file or --path, not both"),
                 (None, None) => bail!("review requires --diff-file or --path"),
             };
+            println!("{}", report.markdown);
+            println!("Report written to {}", report.path);
+        }
+        Command::Learn(args) => {
+            load_project_env(&args.project_root)?;
+            let report = LearnWorkflow::new(args.project_root, agent_from_env()?)
+                .run(LearnRequest {
+                    input: args.input,
+                    category: args.category,
+                    target: args.target,
+                    source_report: args.source_report,
+                })
+                .await?;
             println!("{}", report.markdown);
             println!("Report written to {}", report.path);
         }

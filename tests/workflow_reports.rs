@@ -4,6 +4,7 @@ use ai_human::agent::mock::MockAgentClient;
 use ai_human::agent::{AgentClient, AgentRequest};
 use ai_human::workflow::ask::AskWorkflow;
 use ai_human::workflow::impact::ImpactWorkflow;
+use ai_human::workflow::learn::{LearnRequest, LearnWorkflow};
 use ai_human::workflow::plan::PlanWorkflow;
 use ai_human::workflow::review::ReviewWorkflow;
 use async_trait::async_trait;
@@ -226,6 +227,128 @@ async fn review_workflow_writes_markdown_report_from_text() {
     assert!(report.markdown.contains("No findings"));
     assert!(report.path.ends_with("-review.md"));
     temp.child(&report.path).assert(report.markdown.as_str());
+}
+
+#[tokio::test]
+async fn learn_workflow_writes_knowledge_report_and_memory() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child(".ai-human/knowledge/README.md")
+        .write_str("# Knowledge\n")
+        .unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "title":"Payment audit ownership",
+        "category":"rule",
+        "summary":"Audit rules have a single owner.",
+        "rule":"Payment audit rules are owned by service/pay.",
+        "evidence":["Team review conclusion"],
+        "applies_to":["service/pay"],
+        "target_doc":"engineering-rules"
+    }"#
+    .into()]);
+
+    let report = LearnWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run(LearnRequest {
+            input: "Payment audit rules are owned by service/pay.".into(),
+            category: "rule".into(),
+            target: None,
+            source_report: None,
+        })
+        .await
+        .unwrap();
+
+    assert!(report.markdown.contains("# Payment audit ownership"));
+    assert!(report
+        .markdown
+        .contains("Knowledge written to .ai-human/knowledge/engineering-rules.md"));
+    assert!(report.markdown.contains("Source code files modified: no"));
+    assert!(report.path.ends_with("-learn.md"));
+
+    let knowledge =
+        tokio::fs::read_to_string(temp.path().join(".ai-human/knowledge/engineering-rules.md"))
+            .await
+            .unwrap();
+    let memory = tokio::fs::read_to_string(temp.path().join(".ai-human/memory/learnings.jsonl"))
+        .await
+        .unwrap();
+
+    assert!(knowledge.contains("Payment audit rules are owned by service/pay."));
+    assert!(memory.contains(r#""category":"rule""#));
+    assert!(memory.contains(r#""target_doc":".ai-human/knowledge/engineering-rules.md""#));
+    temp.child(&report.path).assert(report.markdown.as_str());
+}
+
+#[tokio::test]
+async fn learn_workflow_reads_source_report_into_model_prompt() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child(".ai-human/reports/review.md")
+        .write_str("# Review\n\nPersist audit rows before success.")
+        .unwrap();
+    let captured = Arc::new(Mutex::new(None));
+    let agent = RecordingAgentClient {
+        captured: Arc::clone(&captured),
+        response: r#"{
+            "title":"Persist audit rows",
+            "category":"rule",
+            "summary":"Persistence must happen before success.",
+            "rule":"Persist audit rows before returning success.",
+            "evidence":["Review report"],
+            "applies_to":["service/pay"],
+            "target_doc":"engineering-rules"
+        }"#
+        .into(),
+    };
+
+    LearnWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run(LearnRequest {
+            input: "Turn the review into a rule.".into(),
+            category: "rule".into(),
+            target: None,
+            source_report: Some(".ai-human/reports/review.md".into()),
+        })
+        .await
+        .unwrap();
+
+    let request = captured.lock().unwrap().clone().unwrap();
+
+    assert!(request
+        .user_prompt
+        .contains("SOURCE REPORT: .ai-human/reports/review.md"));
+    assert!(request
+        .user_prompt
+        .contains("Persist audit rows before success."));
+}
+
+#[tokio::test]
+async fn learn_workflow_rejects_source_report_outside_project_root() {
+    let project = assert_fs::TempDir::new().unwrap();
+    let outside = assert_fs::TempDir::new().unwrap();
+    outside
+        .child("review.md")
+        .write_str("# Secret report")
+        .unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "title":"unused",
+        "category":"rule",
+        "summary":"unused",
+        "rule":"unused",
+        "evidence":[],
+        "applies_to":[],
+        "target_doc":"engineering-rules"
+    }"#
+    .into()]);
+
+    let error = LearnWorkflow::new(project.path().to_path_buf(), Box::new(agent))
+        .run(LearnRequest {
+            input: "learn from report".into(),
+            category: "rule".into(),
+            target: None,
+            source_report: Some(outside.path().join("review.md")),
+        })
+        .await
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("path must stay inside project root"));
 }
 
 #[tokio::test]

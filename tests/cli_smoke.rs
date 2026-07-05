@@ -11,7 +11,8 @@ fn root_help_lists_core_commands() {
         .stdout(predicate::str::contains("init"))
         .stdout(predicate::str::contains("plan"))
         .stdout(predicate::str::contains("impact"))
-        .stdout(predicate::str::contains("review"));
+        .stdout(predicate::str::contains("review"))
+        .stdout(predicate::str::contains("learn"));
 }
 
 #[test]
@@ -267,4 +268,38 @@ fn review_errors_when_neither_diff_file_nor_path_is_provided() {
     .stderr(predicate::str::contains(
         "review requires --diff-file or --path",
     ));
+}
+
+#[test]
+fn learn_uses_mock_agent_and_prints_written_paths() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"title":"Payment audit ownership","category":"rule","summary":"Audit rules have a single owner.","rule":"Payment audit rules are owned by service/pay.","evidence":["Team review conclusion"],"applies_to":["service/pay"],"target_doc":"engineering-rules"}"#,
+    )
+    .args([
+        "learn",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--input",
+        "Payment audit rules are owned by service/pay.",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("# Payment audit ownership"))
+    .stdout(predicate::str::contains(
+        "Knowledge written to .ai-human/knowledge/engineering-rules.md",
+    ))
+    .stdout(predicate::str::contains("Source code files modified: no"))
+    .stdout(predicate::str::contains("Report written to "))
+    .stdout(predicate::str::contains("-learn.md"));
+
+    temp.child(".ai-human/knowledge/engineering-rules.md")
+        .assert(predicate::str::contains(
+            "Payment audit rules are owned by service/pay.",
+        ));
+    temp.child(".ai-human/memory/learnings.jsonl")
+        .assert(predicate::str::contains(r#""category":"rule""#));
 }

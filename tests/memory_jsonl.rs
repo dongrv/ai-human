@@ -1,10 +1,14 @@
 use chrono::Utc;
 use serde_json::Value;
 
-use ai_human::core::report::{ImpactOutput, PlanOutput, ReviewFinding, ReviewOutput};
-use ai_human::core::task::{DecisionRecord, ReviewRecord, TaskRecord, TaskStatus, TaskType};
+use ai_human::core::report::{
+    ImpactOutput, LearningOutput, PlanOutput, ReviewFinding, ReviewOutput,
+};
+use ai_human::core::task::{
+    DecisionRecord, LearningRecord, ReviewRecord, TaskRecord, TaskStatus, TaskType,
+};
 use ai_human::memory::jsonl::JsonlMemoryStore;
-use ai_human::report::markdown::{render_impact, render_plan, render_review};
+use ai_human::report::markdown::{render_impact, render_learning, render_plan, render_review};
 
 #[tokio::test]
 async fn appends_task_records_as_compact_json_lines() {
@@ -77,6 +81,36 @@ async fn appends_decision_and_review_records_to_dedicated_files() {
     );
 }
 
+#[tokio::test]
+async fn appends_learning_records_to_dedicated_file() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let store = JsonlMemoryStore::new(temp.path().join(".ai-human/memory"));
+
+    store
+        .append_learning(&LearningRecord {
+            task_id: "learn-1".into(),
+            category: "rule".into(),
+            title: "Payment audit ownership".into(),
+            learning: "Payment audit rules are owned by service/pay.".into(),
+            target_doc: ".ai-human/knowledge/engineering-rules.md".into(),
+            evidence: vec!["Team review conclusion".into()],
+        })
+        .await
+        .unwrap();
+
+    let content = tokio::fs::read_to_string(temp.path().join(".ai-human/memory/learnings.jsonl"))
+        .await
+        .unwrap();
+    let value = serde_json::from_str::<Value>(content.trim()).unwrap();
+
+    assert_eq!(value["task_id"], "learn-1");
+    assert_eq!(value["category"], "rule");
+    assert_eq!(
+        value["target_doc"],
+        ".ai-human/knowledge/engineering-rules.md"
+    );
+}
+
 #[test]
 fn renders_plan_output_as_markdown() {
     let markdown = render_plan(&PlanOutput {
@@ -134,6 +168,24 @@ fn renders_review_output_as_markdown() {
     ));
     assert!(markdown.contains("## Test Gaps\n\n- None.\n\n"));
     assert!(markdown.contains("## Residual Risks\n\n- Manual report review still needed\n\n"));
+}
+
+#[test]
+fn renders_learning_output_as_markdown() {
+    let markdown = render_learning(&LearningOutput {
+        title: "Payment audit ownership".into(),
+        category: "rule".into(),
+        summary: "Audit rules have a single owner.".into(),
+        rule: "Payment audit rules are owned by service/pay.".into(),
+        evidence: vec!["Review finding P1".into()],
+        applies_to: vec!["service/pay".into()],
+        target_doc: "engineering-rules".into(),
+    });
+
+    assert!(markdown.starts_with("# Payment audit ownership\n\n"));
+    assert!(markdown.contains("## Category\n\nrule\n\n"));
+    assert!(markdown.contains("## Rule\n\nPayment audit rules are owned by service/pay.\n\n"));
+    assert!(markdown.contains("## Evidence\n\n- Review finding P1\n\n"));
 }
 
 fn task_record(task_id: &str, summary: &str) -> TaskRecord {

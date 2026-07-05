@@ -32,6 +32,19 @@ This keeps the product distinct from a general coding agent. AI Human is not try
 - Add a first-class learning workflow for rules, FAQ, cases, and lessons.
 - Keep architecture SOLID: workflow orchestration does not directly become model, filesystem, command, policy, and report code all at once.
 
+### 3.1 User Experience Requirements
+
+Human-friendly operation is a core requirement, not a polish task. The CLI should reduce decision cost for service-side engineers and technical leads.
+
+- Friendly defaults: `learn` should work with only `--input`; `fix` should default to dry-run and clearly say no files were modified.
+- Actionable errors: every validation error should explain what failed and show the safe next action when possible.
+- Progressive output: show the main result first, then written paths, then follow-up actions; do not bury the outcome in verbose logs.
+- Explicit writes: every command that writes project state should print the exact files it wrote.
+- Copy-paste friendly examples: command help and README examples should be runnable with minimal editing.
+- Low jargon: user-facing text should say "report", "knowledge", "dry run", and "next command" instead of internal architecture terms.
+- Safe learning: `learn` should append reviewable Markdown before teams rely on the new rule.
+- Recovery awareness: reports should make it obvious whether source files were untouched, modified, or only knowledge was appended.
+
 ## 4. Non-Goals
 
 - No automatic Git commit, push, merge, tag, or branch mutation.
@@ -371,6 +384,8 @@ Phase 2 is accepted when:
 - `fix --apply` can complete one controlled local edit on a small test file.
 - Verification evidence is included in the delivery report.
 - Path and symlink safety tests pass.
+- CLI output is understandable without reading source code and includes written paths for every generated artifact.
+- Friendly defaults let a first-time user complete `learn` with one command.
 - Existing `ask`, `plan`, `impact`, and `review` behavior remains unchanged.
 - `cargo fmt -- --check`, `cargo test`, `cargo check`, and `cargo clippy --all-targets -- -D warnings` pass.
 

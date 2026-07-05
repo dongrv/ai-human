@@ -6,7 +6,7 @@ pub mod jsonl {
     use tokio::fs::{self, OpenOptions};
     use tokio::io::AsyncWriteExt;
 
-    use crate::core::task::{DecisionRecord, ReviewRecord, TaskRecord};
+    use crate::core::task::{DecisionRecord, LearningRecord, ReviewRecord, TaskRecord};
 
     #[derive(Debug, Clone)]
     pub struct JsonlMemoryStore {
@@ -30,6 +30,10 @@ pub mod jsonl {
 
         pub async fn append_review(&self, record: &ReviewRecord) -> Result<()> {
             self.append_json_line("reviews.jsonl", record).await
+        }
+
+        pub async fn append_learning(&self, record: &LearningRecord) -> Result<()> {
+            self.append_json_line("learnings.jsonl", record).await
         }
 
         async fn append_json_line<T: Serialize>(&self, file_name: &str, value: &T) -> Result<()> {
