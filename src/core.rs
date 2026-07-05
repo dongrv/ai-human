@@ -106,6 +106,24 @@ pub mod report {
         pub applies_to: Vec<String>,
         pub target_doc: String,
     }
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct FixReplacementFile {
+        pub path: String,
+        pub contents: String,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct FixPlanOutput {
+        pub summary: String,
+        pub target_files: Vec<String>,
+        pub change_intent: String,
+        pub risk_level: String,
+        pub risks: Vec<String>,
+        pub verification_commands: Vec<String>,
+        pub replacement_files: Vec<FixReplacementFile>,
+        pub open_questions: Vec<String>,
+    }
 }
 
 pub mod task {

@@ -1,5 +1,7 @@
 pub mod markdown {
-    use crate::core::report::{ImpactOutput, LearningOutput, PlanOutput, ReviewOutput};
+    use crate::core::report::{
+        FixPlanOutput, ImpactOutput, LearningOutput, PlanOutput, ReviewOutput,
+    };
 
     pub fn render_plan(output: &PlanOutput) -> String {
         let mut md = String::new();
@@ -73,6 +75,47 @@ pub mod markdown {
         push_list(&mut md, "Applies To", &output.applies_to);
 
         md
+    }
+
+    pub fn render_fix_plan(output: &FixPlanOutput) -> String {
+        let mut md = String::new();
+
+        md.push_str("# Fix Dry Run\n\n");
+        md.push_str("## Summary\n\n");
+        md.push_str(&format!("{}\n\n", output.summary));
+        md.push_str("## Result\n\n");
+        md.push_str("- Source code files modified: no\n");
+        md.push_str(
+            "- This is a dry-run report. Review it before using `--apply` in a later phase.\n\n",
+        );
+        push_list(&mut md, "Target Files", &output.target_files);
+        md.push_str("## Change Intent\n\n");
+        md.push_str(&format!("{}\n\n", output.change_intent));
+        md.push_str("## Risk Level\n\n");
+        md.push_str(&format!("{}\n\n", output.risk_level));
+        push_list(&mut md, "Risks", &output.risks);
+        push_list(
+            &mut md,
+            "Verification Commands",
+            &output.verification_commands,
+        );
+        push_replacement_files(&mut md, output);
+        push_list(&mut md, "Open Questions", &output.open_questions);
+
+        md
+    }
+
+    fn push_replacement_files(md: &mut String, output: &FixPlanOutput) {
+        md.push_str("## Proposed Replacement Files\n\n");
+        if output.replacement_files.is_empty() {
+            md.push_str("- None.\n\n");
+            return;
+        }
+
+        for file in &output.replacement_files {
+            md.push_str(&format!("- `{}`\n", file.path));
+        }
+        md.push('\n');
     }
 
     fn push_list(md: &mut String, title: &str, values: &[String]) {

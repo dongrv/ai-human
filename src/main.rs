@@ -7,6 +7,7 @@ use ai_human::agent::AgentClient;
 use ai_human::cli::{Cli, Command};
 use ai_human::env::load_project_env;
 use ai_human::workflow::ask::AskWorkflow;
+use ai_human::workflow::fix::{FixRequest, FixWorkflow};
 use ai_human::workflow::impact::ImpactWorkflow;
 use ai_human::workflow::init::InitWorkflow;
 use ai_human::workflow::learn::{LearnRequest, LearnWorkflow};
@@ -75,6 +76,25 @@ async fn main() -> Result<()> {
                     category: args.category,
                     target: args.target,
                     source_report: args.source_report,
+                })
+                .await?;
+            println!("{}", report.markdown);
+            println!("Report written to {}", report.path);
+        }
+        Command::Fix(args) => {
+            if args.apply {
+                bail!(
+                    "fix --apply is reserved for Phase 2C; run without --apply to review the dry-run plan first."
+                );
+            }
+
+            load_project_env(&args.project_root)?;
+            let report = FixWorkflow::new(args.project_root, agent_from_env()?)
+                .run_dry_run(FixRequest {
+                    input: args.input,
+                    path: args.path,
+                    verify_commands: args.verify,
+                    format_command: args.format,
                 })
                 .await?;
             println!("{}", report.markdown);

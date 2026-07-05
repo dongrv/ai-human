@@ -2,13 +2,16 @@ use chrono::Utc;
 use serde_json::Value;
 
 use ai_human::core::report::{
-    ImpactOutput, LearningOutput, PlanOutput, ReviewFinding, ReviewOutput,
+    FixPlanOutput, FixReplacementFile, ImpactOutput, LearningOutput, PlanOutput, ReviewFinding,
+    ReviewOutput,
 };
 use ai_human::core::task::{
     DecisionRecord, LearningRecord, ReviewRecord, TaskRecord, TaskStatus, TaskType,
 };
 use ai_human::memory::jsonl::JsonlMemoryStore;
-use ai_human::report::markdown::{render_impact, render_learning, render_plan, render_review};
+use ai_human::report::markdown::{
+    render_fix_plan, render_impact, render_learning, render_plan, render_review,
+};
 
 #[tokio::test]
 async fn appends_task_records_as_compact_json_lines() {
@@ -186,6 +189,29 @@ fn renders_learning_output_as_markdown() {
     assert!(markdown.contains("## Category\n\nrule\n\n"));
     assert!(markdown.contains("## Rule\n\nPayment audit rules are owned by service/pay.\n\n"));
     assert!(markdown.contains("## Evidence\n\n- Review finding P1\n\n"));
+}
+
+#[test]
+fn renders_fix_plan_output_as_dry_run_markdown() {
+    let markdown = render_fix_plan(&FixPlanOutput {
+        summary: "Add a nil guard before audit parsing.".into(),
+        target_files: vec!["service/pay/audit.go".into()],
+        change_intent: "Prevent panic on missing audit payload.".into(),
+        risk_level: "low".into(),
+        risks: vec!["Behavior changes for malformed payloads".into()],
+        verification_commands: vec!["go test ./service/pay".into()],
+        replacement_files: vec![FixReplacementFile {
+            path: "service/pay/audit.go".into(),
+            contents: "package pay\n".into(),
+        }],
+        open_questions: vec![],
+    });
+
+    assert!(markdown.starts_with("# Fix Dry Run\n\n"));
+    assert!(markdown.contains("## Summary\n\nAdd a nil guard before audit parsing.\n\n"));
+    assert!(markdown.contains("## Target Files\n\n- service/pay/audit.go\n\n"));
+    assert!(markdown.contains("- Source code files modified: no\n"));
+    assert!(markdown.contains("## Verification Commands\n\n- go test ./service/pay\n\n"));
 }
 
 fn task_record(task_id: &str, summary: &str) -> TaskRecord {

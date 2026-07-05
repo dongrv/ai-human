@@ -12,7 +12,8 @@ fn root_help_lists_core_commands() {
         .stdout(predicate::str::contains("plan"))
         .stdout(predicate::str::contains("impact"))
         .stdout(predicate::str::contains("review"))
-        .stdout(predicate::str::contains("learn"));
+        .stdout(predicate::str::contains("learn"))
+        .stdout(predicate::str::contains("fix"));
 }
 
 #[test]
@@ -302,4 +303,64 @@ fn learn_uses_mock_agent_and_prints_written_paths() {
         ));
     temp.child(".ai-human/memory/learnings.jsonl")
         .assert(predicate::str::contains(r#""category":"rule""#));
+}
+
+#[test]
+fn fix_uses_mock_agent_and_prints_dry_run_report() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("service/pay/audit.go")
+        .write_str("package pay\n\nfunc Audit() {}\n")
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"summary":"Add a nil guard before audit parsing.","target_files":["service/pay/audit.go"],"change_intent":"Prevent panic on missing audit payload.","risk_level":"low","risks":["Behavior changes for malformed payloads"],"verification_commands":["go test ./service/pay"],"replacement_files":[{"path":"service/pay/audit.go","contents":"package pay\n\nfunc Audit() {}\n"}],"open_questions":[]}"#,
+    )
+    .args([
+        "fix",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--input",
+        "Fix missing nil guard",
+        "--path",
+        "service/pay/audit.go",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("# Fix Dry Run"))
+    .stdout(predicate::str::contains("Source code files modified: no"))
+    .stdout(predicate::str::contains("Report written to "))
+    .stdout(predicate::str::contains("-fix-dry-run.md"));
+
+    temp.child("service/pay/audit.go")
+        .assert("package pay\n\nfunc Audit() {}\n");
+}
+
+#[test]
+fn fix_apply_is_reserved_for_later_phase() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("service/pay/audit.go")
+        .write_str("package pay\n\nfunc Audit() {}\n")
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"summary":"unused","target_files":[],"change_intent":"unused","risk_level":"low","risks":[],"verification_commands":[],"replacement_files":[],"open_questions":[]}"#,
+    )
+    .args([
+        "fix",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--input",
+        "Fix missing nil guard",
+        "--path",
+        "service/pay/audit.go",
+        "--apply",
+    ])
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("fix --apply is reserved for Phase 2C"))
+    .stderr(predicate::str::contains("run without --apply"));
 }

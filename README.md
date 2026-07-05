@@ -33,6 +33,12 @@ Save a reusable engineering lesson:
 cargo run -- learn --input "Payment audit rules are owned by service/pay and must persist before success."
 ```
 
+Preview a small local fix without changing source files:
+
+```powershell
+cargo run -- fix --input "Fix missing nil guard in payment audit parser" --path service/pay/audit.go
+```
+
 ## Model Environment Variables
 
 Copy `.env.example` to `.env` and fill in local model credentials:
@@ -113,6 +119,22 @@ cargo run -- learn --input "Turn this review into a reusable rule" --source-repo
 ```
 
 The learn workflow prints the learning report, writes a report ending in `-learn.md`, appends Markdown to `.ai-human/knowledge/engineering-rules.md` by default, and appends structured memory to `.ai-human/memory/learnings.jsonl`. Source code files are not modified by `learn`.
+
+## Fix Dry Run Example
+
+Preview a bounded fix plan for one target file:
+
+```powershell
+cargo run -- fix --input "Fix missing nil guard in payment audit parser" --path service/pay/audit.go
+```
+
+Include verification and formatting commands for the model to consider:
+
+```powershell
+cargo run -- fix --input "Fix missing nil guard in payment audit parser" --path service/pay/audit.go --verify "go test ./service/pay" --format "gofmt -w service/pay/audit.go"
+```
+
+The fix workflow is dry-run by default in Phase 2B. It reads the target file, prints a `# Fix Dry Run` report, writes a report ending in `-fix-dry-run.md`, and explicitly reports `Source code files modified: no`. `fix --apply` is reserved for Phase 2C.
 
 ## Safety Boundary
 

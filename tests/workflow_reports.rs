@@ -3,6 +3,7 @@ use assert_fs::prelude::*;
 use ai_human::agent::mock::MockAgentClient;
 use ai_human::agent::{AgentClient, AgentRequest};
 use ai_human::workflow::ask::AskWorkflow;
+use ai_human::workflow::fix::{FixRequest, FixWorkflow};
 use ai_human::workflow::impact::ImpactWorkflow;
 use ai_human::workflow::learn::{LearnRequest, LearnWorkflow};
 use ai_human::workflow::plan::PlanWorkflow;
@@ -349,6 +350,120 @@ async fn learn_workflow_rejects_source_report_outside_project_root() {
         .to_string();
 
     assert!(error.contains("path must stay inside project root"));
+}
+
+#[tokio::test]
+async fn fix_workflow_writes_dry_run_report_without_modifying_target_file() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("service/pay/audit.go")
+        .write_str("package pay\n\nfunc Audit() {}\n")
+        .unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "summary":"Add a nil guard before audit parsing.",
+        "target_files":["service/pay/audit.go"],
+        "change_intent":"Prevent panic on missing audit payload.",
+        "risk_level":"low",
+        "risks":["Behavior changes for malformed payloads"],
+        "verification_commands":["go test ./service/pay"],
+        "replacement_files":[{"path":"service/pay/audit.go","contents":"package pay\n\nfunc Audit() {}\n"}],
+        "open_questions":[]
+    }"#
+    .into()]);
+
+    let report = FixWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run_dry_run(FixRequest {
+            input: "Fix missing nil guard in payment audit parser".into(),
+            path: "service/pay/audit.go".into(),
+            verify_commands: vec![],
+            format_command: None,
+        })
+        .await
+        .unwrap();
+
+    let target = tokio::fs::read_to_string(temp.path().join("service/pay/audit.go"))
+        .await
+        .unwrap();
+
+    assert_eq!(target, "package pay\n\nfunc Audit() {}\n");
+    assert!(report.markdown.contains("# Fix Dry Run"));
+    assert!(report.markdown.contains("Source code files modified: no"));
+    assert!(report.path.ends_with("-fix-dry-run.md"));
+    temp.child(&report.path).assert(report.markdown.as_str());
+}
+
+#[tokio::test]
+async fn fix_workflow_includes_target_file_in_model_prompt() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("service/pay/audit.go")
+        .write_str("package pay\n\nfunc Audit() {}\n")
+        .unwrap();
+    let captured = Arc::new(Mutex::new(None));
+    let agent = RecordingAgentClient {
+        captured: Arc::clone(&captured),
+        response: r#"{
+            "summary":"Add a nil guard before audit parsing.",
+            "target_files":["service/pay/audit.go"],
+            "change_intent":"Prevent panic on missing audit payload.",
+            "risk_level":"low",
+            "risks":[],
+            "verification_commands":[],
+            "replacement_files":[],
+            "open_questions":[]
+        }"#
+        .into(),
+    };
+
+    FixWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run_dry_run(FixRequest {
+            input: "Fix missing nil guard".into(),
+            path: "service/pay/audit.go".into(),
+            verify_commands: vec!["go test ./service/pay".into()],
+            format_command: Some("gofmt -w service/pay/audit.go".into()),
+        })
+        .await
+        .unwrap();
+
+    let request = captured.lock().unwrap().clone().unwrap();
+
+    assert!(request
+        .user_prompt
+        .contains("TARGET FILE: service/pay/audit.go"));
+    assert!(request.user_prompt.contains("func Audit() {}"));
+    assert!(request
+        .user_prompt
+        .contains("USER VERIFY COMMANDS:\n- go test ./service/pay"));
+    assert!(request
+        .user_prompt
+        .contains("USER FORMAT COMMAND:\ngofmt -w service/pay/audit.go"));
+}
+
+#[tokio::test]
+async fn fix_workflow_rejects_missing_target_file_before_model_call() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "summary":"unused",
+        "target_files":[],
+        "change_intent":"unused",
+        "risk_level":"low",
+        "risks":[],
+        "verification_commands":[],
+        "replacement_files":[],
+        "open_questions":[]
+    }"#
+    .into()]);
+
+    let error = FixWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run_dry_run(FixRequest {
+            input: "Fix missing nil guard".into(),
+            path: "missing.go".into(),
+            verify_commands: vec![],
+            format_command: None,
+        })
+        .await
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("path must reference an existing project file"));
 }
 
 #[tokio::test]

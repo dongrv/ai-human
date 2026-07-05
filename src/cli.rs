@@ -18,6 +18,7 @@ pub enum Command {
     Impact(ImpactArgs),
     Review(ReviewArgs),
     Learn(LearnArgs),
+    Fix(FixArgs),
 }
 
 #[derive(Debug, Args)]
@@ -89,4 +90,35 @@ pub struct LearnArgs {
         help = "Optional .ai-human report file to include as source material"
     )]
     pub source_report: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct FixArgs {
+    #[arg(
+        long,
+        default_value = ".",
+        help = "Project root that owns the target file and .ai-human state"
+    )]
+    pub project_root: PathBuf,
+
+    #[arg(long, help = "Problem statement or desired small local fix")]
+    pub input: String,
+
+    #[arg(long, help = "Single target file to analyze in Phase 2B")]
+    pub path: PathBuf,
+
+    #[arg(long, help = "Preview the fix plan without modifying source files")]
+    pub dry_run: bool,
+
+    #[arg(
+        long,
+        help = "Reserved for Phase 2C; Phase 2B only produces dry-run reports"
+    )]
+    pub apply: bool,
+
+    #[arg(long, help = "Verification command to include in the dry-run plan")]
+    pub verify: Vec<String>,
+
+    #[arg(long, help = "Formatting command to include in the dry-run plan")]
+    pub format: Option<String>,
 }

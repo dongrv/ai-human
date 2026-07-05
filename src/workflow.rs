@@ -203,6 +203,99 @@ Return only JSON matching this schema:
 "#;
 }
 
+pub mod fix {
+    use std::path::PathBuf;
+
+    use anyhow::Result;
+
+    use crate::agent::{AgentClient, AgentRequest};
+    use crate::context::loader::ContextLoader;
+    use crate::core::report::FixPlanOutput;
+    use crate::report::markdown::render_fix_plan;
+    use crate::tools::fs::ProjectFs;
+    use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct FixRequest {
+        pub input: String,
+        pub path: PathBuf,
+        pub verify_commands: Vec<String>,
+        pub format_command: Option<String>,
+    }
+
+    pub struct FixWorkflow {
+        project_root: PathBuf,
+        agent: Box<dyn AgentClient>,
+    }
+
+    impl FixWorkflow {
+        pub fn new(project_root: PathBuf, agent: Box<dyn AgentClient>) -> Self {
+            Self {
+                project_root,
+                agent,
+            }
+        }
+
+        pub async fn run_dry_run(&self, request: FixRequest) -> Result<WorkflowReport> {
+            let fs = ProjectFs::new(self.project_root.clone());
+            let target_file = fs.read_text(&request.path).await?;
+            let context = ContextLoader::new(self.project_root.clone())
+                .load_for_input(&request.input)
+                .await?;
+            let output: FixPlanOutput = self
+                .agent
+                .complete_json(AgentRequest {
+                    system_prompt: FIX_SYSTEM_PROMPT.into(),
+                    user_prompt: format!(
+                        "INPUT:\n{}\n\nTARGET FILE: {}\n\n{}\n\nUSER VERIFY COMMANDS:\n{}\n\nUSER FORMAT COMMAND:\n{}\n\nCONTEXT:\n{}",
+                        request.input,
+                        target_file.display_path,
+                        target_file.text,
+                        format_commands(&request.verify_commands),
+                        request.format_command.as_deref().unwrap_or("none"),
+                        context.combined_text
+                    ),
+                })
+                .await?;
+            let markdown = render_fix_plan(&output);
+            let path = report_path(&self.project_root, "fix-dry-run");
+            write_report(&path, &markdown).await?;
+
+            Ok(WorkflowReport {
+                path: report_display_path(&self.project_root, &path),
+                markdown,
+            })
+        }
+    }
+
+    fn format_commands(commands: &[String]) -> String {
+        if commands.is_empty() {
+            return "none".into();
+        }
+
+        commands
+            .iter()
+            .map(|command| format!("- {command}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    const FIX_SYSTEM_PROMPT: &str = r#"You are AI Digital Human V1, a cautious service-side fix planner.
+Create a dry-run plan for the smallest safe local code change. Do not claim files were modified.
+Return only JSON matching this schema:
+{
+  "summary": "short fix summary",
+  "target_files": ["target files"],
+  "change_intent": "what should change and why",
+  "risk_level": "low|medium|high",
+  "risks": ["business, protocol, state, persistence, or compatibility risks"],
+  "verification_commands": ["commands the human should run"],
+  "replacement_files": [{"path": "target file path", "contents": "full replacement file content"}],
+  "open_questions": ["questions requiring human confirmation"]
+}
+"#;
+}
+
 pub mod learn {
     use std::path::{Path, PathBuf};
 
