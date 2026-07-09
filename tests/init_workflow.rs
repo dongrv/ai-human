@@ -19,6 +19,7 @@ const EXPECTED_FILES: &[&str] = &[
     ".ai-human/memory/decisions.jsonl",
     ".ai-human/memory/reviews.jsonl",
     ".ai-human/memory/learnings.jsonl",
+    ".ai-human/memory/metrics.jsonl",
 ];
 
 #[tokio::test]

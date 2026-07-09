@@ -1115,6 +1115,7 @@ pub mod init {
                 "decisions.jsonl",
                 "reviews.jsonl",
                 "learnings.jsonl",
+                "metrics.jsonl",
             ] {
                 write_if_missing(&memory.join(file_name), "").await?;
             }

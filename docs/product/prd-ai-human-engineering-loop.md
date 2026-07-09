@@ -98,6 +98,24 @@ AI Human 的设计必须优先服务真实使用者，而不是展示模型能�
 | dry-run 后进入 apply 的比例 | 20% 到 50% |
 | 单次任务平均交互轮次 | 下降，但不牺牲安全确认 |
 
+### 3.3.1 本地指标事件 v1
+
+指标先采用本地 JSONL，不做远端上报，不采集源码内容和用户 prompt 原文。
+
+存储位置：
+
+- `.ai-human/memory/metrics.jsonl`
+
+每条命令事件包含：
+
+- `recorded_at`: 记录时间。
+- `command`: 命令名，例如 `plan`、`impact`、`review`、`fix`。
+- `status`: `success` 或 `failed`。
+- `duration_ms`: 命令耗时。
+- `task_id`: 有任务 ID 时记录。
+- `report_path`: 命令生成报告时记录。
+- `error`: 失败时记录短错误摘要。
+
 ### 3.4 工程结果指标
 
 | 指标 | 目标 |
@@ -568,15 +586,16 @@ v1 默认对 High 风险阻断 apply。
 - `plan`、`impact`、`review`、`learn`、`fix` 报告已包含任务上下文、依据、风险、下一阶段动作。
 - 成功命令统一输出 `## Result Summary`，报告型命令输出报告路径和 `Next stage:`。
 - `fix` 默认 dry-run，`fix --apply` 遇到 High 风险默认阻断。
+- 报告型命令已写入 `.ai-human/memory/tasks.jsonl`，`task --id` 可查看同一任务的报告链路。
+- 命令已写入 `.ai-human/memory/metrics.jsonl`，记录本地成功率、失败摘要、耗时和报告产出。
 
 部分完成：
 
 - 高频可恢复错误已输出 `Next:` 建议，仍需覆盖所有模型/provider 配置错误。
-- 写操作已记录报告路径和验证结果，仍需把任务级 trace 串成可查询索引。
+- 写操作已记录报告路径和验证结果，任务索引已有最小可查询能力，仍需增加更强的状态导航和继续执行能力。
 
 待推进：
 
-- 建立最小可用的使用指标记录，用于判断工具是否真实提效。
 - 增加任务 ID 索引与报告导航，降低跨命令追踪成本。
 - 继续压缩高频命令输入参数，让用户更少记忆命令细节。
 

@@ -26,6 +26,8 @@ pub enum Command {
     Learn(LearnArgs),
     #[command(about = "Preview or apply one-file local fixes")]
     Fix(FixArgs),
+    #[command(about = "Show reports and next actions for a task id")]
+    Task(TaskArgs),
     #[command(about = "Check project setup and model configuration")]
     Doctor(DoctorArgs),
 }
@@ -163,4 +165,17 @@ pub struct FixArgs {
         help = "Formatting command to run after --apply or include in dry-run"
     )]
     pub format: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct TaskArgs {
+    #[arg(
+        long,
+        default_value = ".",
+        help = "Project root that owns .ai-human state"
+    )]
+    pub project_root: PathBuf,
+
+    #[arg(long, help = "Task id to inspect")]
+    pub id: String,
 }

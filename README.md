@@ -114,6 +114,14 @@ cargo run -- review --task-id pay-audit-001 --path service/pay/audit.go
 
 If `--task-id` is omitted, AI Human generates one automatically and prints it in the report's `## Task` section.
 
+Inspect the local task timeline later:
+
+```powershell
+cargo run -- task --id pay-audit-001
+```
+
+The task command reads `.ai-human/memory/tasks.jsonl`, prints the reports recorded for that task id, and suggests the next continuation step. It does not call the model.
+
 Reports use `Next stage:` entries to connect the normal loop:
 
 ```text
@@ -130,6 +138,8 @@ Successful commands print a compact result summary so the next task is visible w
 ```
 
 Recoverable command errors include a `Next:` hint. For example, path and review-source errors tell you whether to pass an existing project file, choose either `--path` or `--diff-file`, or adjust `--project-root`.
+
+AI Human also appends local command metrics to `.ai-human/memory/metrics.jsonl`. Each record contains the command name, success or failure status, duration, task id when available, report path when produced, and a short error summary on failure. Metrics do not include source file contents or user prompt text.
 
 ## Impact Example
 

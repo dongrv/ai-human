@@ -22,6 +22,7 @@ fn root_help_lists_core_commands() {
         .stdout(predicate::str::contains("review"))
         .stdout(predicate::str::contains("learn"))
         .stdout(predicate::str::contains("fix"))
+        .stdout(predicate::str::contains("task"))
         .stdout(predicate::str::contains("Check project setup"))
         .stdout(predicate::str::contains("Preview or apply"));
 }
@@ -256,6 +257,55 @@ fn plan_accepts_task_id_and_prints_it_in_report() {
     .stdout(predicate::str::contains("- Task ID: pay-audit-001"))
     .stdout(predicate::str::contains("Report written to "))
     .stdout(predicate::str::contains("-plan.md"));
+
+    temp.child(".ai-human/memory/tasks.jsonl")
+        .assert(predicate::str::contains(r#""task_id":"pay-audit-001""#))
+        .assert(predicate::str::contains(r#""task_type":"Plan""#))
+        .assert(predicate::str::contains(
+            r#""report_path":".ai-human/reports/"#,
+        ))
+        .assert(predicate::str::contains("-plan.md"));
+    temp.child(".ai-human/memory/metrics.jsonl")
+        .assert(predicate::str::contains(r#""command":"plan""#))
+        .assert(predicate::str::contains(r#""status":"success""#))
+        .assert(predicate::str::contains(r#""task_id":"pay-audit-001""#));
+}
+
+#[test]
+fn task_command_shows_reports_for_task_id() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child(".ai-human/memory/tasks.jsonl")
+        .write_str(
+            r#"{"task_id":"pay-audit-001","task_type":"Plan","repo":"sample","input":"plan payment audit","status":"Completed","started_at":"2026-07-09T00:00:00Z","completed_at":"2026-07-09T00:00:01Z","summary":"Design payment audit.","report_path":".ai-human/reports/pay-audit-001-plan.md"}
+{"task_id":"pay-audit-001","task_type":"ImpactAnalysis","repo":"sample","input":"audit impact","status":"Completed","started_at":"2026-07-09T00:00:02Z","completed_at":"2026-07-09T00:00:03Z","summary":"Audit touches payment state.","report_path":".ai-human/reports/pay-audit-001-impact.md"}
+"#,
+        )
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.args([
+        "task",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--id",
+        "pay-audit-001",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("# Task pay-audit-001"))
+    .stdout(predicate::str::contains(
+        "plan completed: Design payment audit.",
+    ))
+    .stdout(predicate::str::contains(
+        "impact completed: Audit touches payment state.",
+    ))
+    .stdout(predicate::str::contains(
+        ".ai-human/reports/pay-audit-001-impact.md",
+    ))
+    .stdout(predicate::str::contains("## Result Summary"))
+    .stdout(predicate::str::contains(
+        "- Next stage: open the latest report or continue with the listed command",
+    ));
 }
 
 #[test]
