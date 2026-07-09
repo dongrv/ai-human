@@ -5,6 +5,7 @@ use ai_human::agent::mock::MockAgentClient;
 use ai_human::agent::rig_client::{OpenAiWireApi, RigAgentClient};
 use ai_human::agent::AgentClient;
 use ai_human::cli::{Cli, Command};
+use ai_human::config::load_project_config;
 use ai_human::core::task::TaskId;
 use ai_human::env::load_project_env;
 use ai_human::workflow::ask::AskWorkflow;
@@ -98,12 +99,19 @@ async fn main() -> Result<()> {
         }
         Command::Fix(args) => {
             load_project_env(&args.project_root)?;
+            let config = load_project_config(&args.project_root).await?;
             let apply = args.apply;
+            let verify_commands = if args.verify.is_empty() {
+                config.fix.default_verify_commands
+            } else {
+                args.verify
+            };
+            let format_command = args.format.or(config.fix.default_format_command);
             let request = FixRequest {
                 input: args.input,
                 path: args.path,
-                verify_commands: args.verify,
-                format_command: args.format,
+                verify_commands,
+                format_command,
             };
             let workflow = FixWorkflow::new(args.project_root, agent_from_env()?);
             let task_id = TaskId::from_user_input(args.task_id);

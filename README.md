@@ -169,6 +169,16 @@ Include verification and formatting commands for the model to consider:
 cargo run -- fix --input "Fix missing nil guard in payment audit parser" --path service/pay/audit.go --verify "go test ./service/pay" --format "gofmt -w service/pay/audit.go"
 ```
 
+You can also save project defaults in `.ai-human/config.toml`:
+
+```toml
+[fix]
+default_verify_commands = ["go test ./service/pay"]
+default_format_command = "gofmt -w service/pay/audit.go"
+```
+
+When `--verify` or `--format` is supplied on the CLI, the CLI value takes precedence over the config default.
+
 The fix workflow is dry-run by default. It reads the target file, prints a `# Fix Dry Run` report, writes a report ending in `-fix-dry-run.md`, and explicitly reports `Source code files modified: no`.
 
 Apply a bounded replacement after reviewing the dry-run plan:

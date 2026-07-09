@@ -531,6 +531,95 @@ fn fix_accepts_task_id_and_prints_it_in_report() {
 }
 
 #[test]
+fn fix_uses_configured_default_commands_when_flags_are_omitted() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("service/pay/audit.go")
+        .write_str("package pay\n\nfunc Audit() {}\n")
+        .unwrap();
+    temp.child(".ai-human/config.toml")
+        .write_str(
+            r#"project_name = "sample"
+model_provider = "openai"
+model_name = "gpt-4o-mini"
+knowledge_dir = ".ai-human/knowledge"
+memory_dir = ".ai-human/memory"
+reports_dir = ".ai-human/reports"
+
+[fix]
+default_verify_commands = ["cargo --version"]
+"#,
+        )
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"summary":"Add a nil guard before audit parsing.","target_files":["service/pay/audit.go"],"change_intent":"Prevent panic on missing audit payload.","risk_level":"low","risks":[],"verification_commands":["go test ./service/pay"],"replacement_files":[{"path":"service/pay/audit.go","contents":"package pay\n\nfunc Audit() {}\n"}],"open_questions":[]}"#,
+    )
+    .args([
+        "fix",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--input",
+        "Fix missing nil guard",
+        "--path",
+        "service/pay/audit.go",
+        "--apply",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("## Verification Results"))
+    .stdout(predicate::str::contains("cargo --version"));
+}
+
+#[test]
+fn fix_cli_commands_override_configured_default_commands() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("service/pay/audit.go")
+        .write_str("package pay\n\nfunc Audit() {}\n")
+        .unwrap();
+    temp.child(".ai-human/config.toml")
+        .write_str(
+            r#"project_name = "sample"
+model_provider = "openai"
+model_name = "gpt-4o-mini"
+knowledge_dir = ".ai-human/knowledge"
+memory_dir = ".ai-human/memory"
+reports_dir = ".ai-human/reports"
+
+[fix]
+default_verify_commands = ["go test ./service/pay"]
+default_format_command = "gofmt -w service/pay/audit.go"
+"#,
+        )
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"summary":"Add a nil guard before audit parsing.","target_files":["service/pay/audit.go"],"change_intent":"Prevent panic on missing audit payload.","risk_level":"low","risks":[],"verification_commands":["cargo test --test override"],"replacement_files":[{"path":"service/pay/audit.go","contents":"package pay\n\nfunc Audit() {}\n"}],"open_questions":[]}"#,
+    )
+    .args([
+        "fix",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--input",
+        "Fix missing nil guard",
+        "--path",
+        "service/pay/audit.go",
+        "--verify",
+        "cargo --version",
+        "--format",
+        "cargo --version",
+        "--apply",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("cargo --version"))
+    .stdout(predicate::str::contains("go test ./service/pay").not());
+}
+
+#[test]
 fn fix_apply_uses_mock_agent_and_modifies_target_file() {
     let temp = assert_fs::TempDir::new().unwrap();
     temp.child("src/lib.rs")

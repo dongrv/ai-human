@@ -42,6 +42,20 @@ async fn init_creates_ai_human_layout() {
 }
 
 #[tokio::test]
+async fn init_config_contains_fix_defaults() {
+    let temp = assert_fs::TempDir::new().unwrap();
+
+    InitWorkflow::new(temp.path().to_path_buf())
+        .run()
+        .await
+        .unwrap();
+
+    temp.child(".ai-human/config.toml")
+        .assert(predicate::str::contains("[fix]"))
+        .assert(predicate::str::contains("default_verify_commands = []"));
+}
+
+#[tokio::test]
 async fn init_does_not_overwrite_existing_files() {
     let temp = assert_fs::TempDir::new().unwrap();
     temp.child(".ai-human/config.toml")
