@@ -586,17 +586,17 @@ v1 默认对 High 风险阻断 apply。
 - `plan`、`impact`、`review`、`learn`、`fix` 报告已包含任务上下文、依据、风险、下一阶段动作。
 - 成功命令统一输出 `## Result Summary`，报告型命令输出报告路径和 `Next stage:`。
 - `fix` 默认 dry-run，`fix --apply` 遇到 High 风险默认阻断。
-- 报告型命令已写入 `.ai-human/memory/tasks.jsonl`，`task --id` 可查看同一任务的报告链路。
+- 报告型命令已写入 `.ai-human/memory/tasks.jsonl`，`task --id` 可查看同一任务的报告链路，并输出可复制的 `Suggested command:`。
 - 命令已写入 `.ai-human/memory/metrics.jsonl`，记录本地成功率、失败摘要、耗时和报告产出。
 
 部分完成：
 
 - 高频可恢复错误已输出 `Next:` 建议，仍需覆盖所有模型/provider 配置错误。
-- 写操作已记录报告路径和验证结果，任务索引已有最小可查询能力，仍需增加更强的状态导航和继续执行能力。
+- 写操作已记录报告路径和验证结果，任务索引已有最小可查询能力，仍需支持命令参数从任务上下文自动继承。
 
 待推进：
 
-- 增加任务 ID 索引与报告导航，降低跨命令追踪成本。
+- 支持从 `task --id` 或历史报告继续执行，自动继承 task id、路径和 source report。
 - 继续压缩高频命令输入参数，让用户更少记忆命令细节。
 
 ## 16. 下一步建议

@@ -277,7 +277,7 @@ fn task_command_shows_reports_for_task_id() {
     temp.child(".ai-human/memory/tasks.jsonl")
         .write_str(
             r#"{"task_id":"pay-audit-001","task_type":"Plan","repo":"sample","input":"plan payment audit","status":"Completed","started_at":"2026-07-09T00:00:00Z","completed_at":"2026-07-09T00:00:01Z","summary":"Design payment audit.","report_path":".ai-human/reports/pay-audit-001-plan.md"}
-{"task_id":"pay-audit-001","task_type":"ImpactAnalysis","repo":"sample","input":"audit impact","status":"Completed","started_at":"2026-07-09T00:00:02Z","completed_at":"2026-07-09T00:00:03Z","summary":"Audit touches payment state.","report_path":".ai-human/reports/pay-audit-001-impact.md"}
+{"task_id":"pay-audit-001","task_type":"ImpactAnalysis","repo":"sample","input":"audit impact\nPATH: service/pay/audit.go","status":"Completed","started_at":"2026-07-09T00:00:02Z","completed_at":"2026-07-09T00:00:03Z","summary":"Audit touches payment state.","report_path":".ai-human/reports/pay-audit-001-impact.md"}
 "#,
         )
         .unwrap();
@@ -305,6 +305,9 @@ fn task_command_shows_reports_for_task_id() {
     .stdout(predicate::str::contains("## Result Summary"))
     .stdout(predicate::str::contains(
         "- Next stage: open the latest report or continue with the listed command",
+    ))
+    .stdout(predicate::str::contains(
+        "ai-human review --task-id pay-audit-001 --path",
     ));
 }
 

@@ -1,6 +1,6 @@
 use chrono::Utc;
 
-use ai_human::core::task::TaskType;
+use ai_human::core::task::{TaskRecord, TaskStatus, TaskType};
 use ai_human::task_index::{render_task_timeline, CompletedTaskReport, TaskIndex};
 
 #[tokio::test]
@@ -48,17 +48,12 @@ async fn loading_missing_task_returns_empty_timeline() {
 fn renders_task_timeline_as_actionable_markdown() {
     let timeline = ai_human::task_index::TaskTimeline {
         task_id: "pay-audit-001".into(),
-        records: vec![ai_human::core::task::TaskRecord {
-            task_id: "pay-audit-001".into(),
-            task_type: TaskType::ImpactAnalysis,
-            repo: "sample".into(),
-            input: "service/pay audit flow".into(),
-            status: ai_human::core::task::TaskStatus::Completed,
-            started_at: Utc::now(),
-            completed_at: Some(Utc::now()),
-            summary: "Audit flow touches payment state.".into(),
-            report_path: Some(".ai-human/reports/pay-audit-001-impact.md".into()),
-        }],
+        records: vec![task_record(
+            TaskType::ImpactAnalysis,
+            "service/pay audit flow\nPATH: service/pay/audit.go",
+            "Audit flow touches payment state.",
+            ".ai-human/reports/pay-audit-001-impact.md",
+        )],
     };
 
     let markdown = render_task_timeline(&timeline);
@@ -68,4 +63,78 @@ fn renders_task_timeline_as_actionable_markdown() {
     assert!(markdown.contains("- impact completed: Audit flow touches payment state."));
     assert!(markdown.contains("  Report: .ai-human/reports/pay-audit-001-impact.md"));
     assert!(markdown.contains("## Next\n\n- Open the latest report listed above"));
+    assert!(markdown.contains(
+        "- Suggested command: `ai-human review --task-id pay-audit-001 --path service/pay/audit.go`"
+    ));
+}
+
+#[test]
+fn renders_plan_timeline_with_impact_continuation_command() {
+    let timeline = ai_human::task_index::TaskTimeline {
+        task_id: "pay-audit-001".into(),
+        records: vec![task_record(
+            TaskType::Plan,
+            "analyze payment audit requirement",
+            "Design payment audit.",
+            ".ai-human/reports/pay-audit-001-plan.md",
+        )],
+    };
+
+    let markdown = render_task_timeline(&timeline);
+
+    assert!(markdown.contains(
+        "- Suggested command: `ai-human impact --task-id pay-audit-001 --input \"analyze payment audit requirement\"`"
+    ));
+}
+
+#[test]
+fn renders_review_timeline_with_fix_continuation_command() {
+    let timeline = ai_human::task_index::TaskTimeline {
+        task_id: "pay-audit-001".into(),
+        records: vec![task_record(
+            TaskType::CodeReview,
+            "PATH: service/pay/audit.go",
+            "Review found a nil guard issue.",
+            ".ai-human/reports/pay-audit-001-review.md",
+        )],
+    };
+
+    let markdown = render_task_timeline(&timeline);
+
+    assert!(markdown.contains(
+        "- Suggested command: `ai-human fix --task-id pay-audit-001 --input \"Review found a nil guard issue.\" --path service/pay/audit.go`"
+    ));
+}
+
+#[test]
+fn renders_fix_timeline_with_learn_continuation_command() {
+    let timeline = ai_human::task_index::TaskTimeline {
+        task_id: "pay-audit-001".into(),
+        records: vec![task_record(
+            TaskType::SmallFix,
+            "Fix missing nil guard\nPATH: service/pay/audit.go",
+            "Applied nil guard.",
+            ".ai-human/reports/pay-audit-001-fix-apply.md",
+        )],
+    };
+
+    let markdown = render_task_timeline(&timeline);
+
+    assert!(markdown.contains(
+        "- Suggested command: `ai-human learn --task-id pay-audit-001 --input \"Capture the reusable lesson from this task.\" --source-report .ai-human/reports/pay-audit-001-fix-apply.md`"
+    ));
+}
+
+fn task_record(task_type: TaskType, input: &str, summary: &str, report_path: &str) -> TaskRecord {
+    TaskRecord {
+        task_id: "pay-audit-001".into(),
+        task_type,
+        repo: "sample".into(),
+        input: input.into(),
+        status: TaskStatus::Completed,
+        started_at: Utc::now(),
+        completed_at: Some(Utc::now()),
+        summary: summary.into(),
+        report_path: Some(report_path.into()),
+    }
 }

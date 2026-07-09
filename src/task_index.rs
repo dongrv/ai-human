@@ -126,9 +126,70 @@ pub fn render_task_timeline(timeline: &TaskTimeline) -> String {
             "- Continue the workflow with the same task id: `--task-id {}`.\n",
             timeline.task_id
         ));
+        if let Some(command) = suggested_command(timeline) {
+            markdown.push_str(&format!("- Suggested command: `{command}`\n"));
+        }
     }
 
     markdown
+}
+
+fn suggested_command(timeline: &TaskTimeline) -> Option<String> {
+    let latest = timeline.records.last()?;
+    let task_id = shell_arg(&timeline.task_id);
+
+    match latest.task_type {
+        TaskType::Plan => Some(format!(
+            "ai-human impact --task-id {task_id} --input {}",
+            quoted_arg(&latest.input)
+        )),
+        TaskType::ImpactAnalysis => latest
+            .report_path
+            .as_ref()
+            .and_then(|_| path_hint(&latest.input))
+            .map(|path| {
+                format!(
+                    "ai-human review --task-id {task_id} --path {}",
+                    shell_arg(&path)
+                )
+            }),
+        TaskType::CodeReview => path_hint(&latest.input).map(|path| {
+            format!(
+                "ai-human fix --task-id {task_id} --input {} --path {}",
+                quoted_arg(&latest.summary),
+                shell_arg(&path)
+            )
+        }),
+        TaskType::SmallFix => latest.report_path.as_ref().map(|report_path| {
+            format!(
+                "ai-human learn --task-id {task_id} --input \"Capture the reusable lesson from this task.\" --source-report {}",
+                shell_arg(report_path)
+            )
+        }),
+        TaskType::Ask | TaskType::Learn => None,
+    }
+}
+
+fn path_hint(input: &str) -> Option<String> {
+    input.lines().find_map(|line| {
+        line.trim()
+            .strip_prefix("PATH: ")
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    })
+}
+
+fn quoted_arg(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\\\""))
+}
+
+fn shell_arg(value: &str) -> String {
+    if value.chars().any(char::is_whitespace) {
+        quoted_arg(value)
+    } else {
+        value.into()
+    }
 }
 
 fn task_type_label(task_type: &TaskType) -> &'static str {

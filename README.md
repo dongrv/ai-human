@@ -120,7 +120,7 @@ Inspect the local task timeline later:
 cargo run -- task --id pay-audit-001
 ```
 
-The task command reads `.ai-human/memory/tasks.jsonl`, prints the reports recorded for that task id, and suggests the next continuation step. It does not call the model.
+The task command reads `.ai-human/memory/tasks.jsonl`, prints the reports recorded for that task id, and suggests the next continuation step. When enough context is available, it also prints a `Suggested command:` line that can be copied directly, such as `ai-human review --task-id pay-audit-001 --path service/pay/audit.go`. It does not call the model.
 
 Reports use `Next stage:` entries to connect the normal loop:
 
