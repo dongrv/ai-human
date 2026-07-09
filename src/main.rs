@@ -29,8 +29,17 @@ async fn main() -> Result<()> {
     match cli.command {
         Command::Init(args) => {
             load_project_env(&args.project_root)?;
-            InitWorkflow::new(args.project_root).run().await?;
+            let project_root = args.project_root;
+            InitWorkflow::new(project_root.clone()).run().await?;
             println!("ai-human project initialized");
+            print_result_summary(ResultSummary {
+                summary: "Project initialized.".into(),
+                report: "none".into(),
+                next_stage: format!(
+                    "run `ai-human doctor --project-root {}`",
+                    project_root.display()
+                ),
+            });
         }
         Command::Ask(args) => {
             load_project_env(&args.project_root)?;
@@ -38,11 +47,17 @@ async fn main() -> Result<()> {
                 .run(&args.input)
                 .await?;
             println!("{answer}");
+            print_result_summary(ResultSummary {
+                summary: "Answer generated.".into(),
+                report: "none".into(),
+                next_stage: "run `ai-human plan`, `ai-human impact`, or `ai-human learn`".into(),
+            });
         }
         Command::Doctor(args) => {
             load_project_env(&args.project_root)?;
             let report = DoctorWorkflow::new(args.project_root).run().await?;
             println!("{report}");
+            print_result_summary(doctor_result_summary(&report));
         }
         Command::Plan(args) => {
             load_project_env(&args.project_root)?;
@@ -131,13 +146,53 @@ async fn main() -> Result<()> {
 fn print_workflow_report(report: &WorkflowReport) {
     println!("{}", report.markdown);
     println!("Report written to {}", report.path);
+    print_result_summary(ResultSummary {
+        summary: report_summary(&report.markdown),
+        report: report.path.clone(),
+        next_stage: first_next_stage(&report.markdown)
+            .unwrap_or_else(|| "Review the report.".into()),
+    });
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResultSummary {
+    summary: String,
+    report: String,
+    next_stage: String,
+}
+
+fn print_result_summary(summary: ResultSummary) {
     println!("## Result Summary");
-    println!("- Summary: {}", report_summary(&report.markdown));
-    println!("- Report: {}", report.path);
-    println!(
-        "- Next stage: {}",
-        first_next_stage(&report.markdown).unwrap_or_else(|| "Review the report.".into())
-    );
+    println!("- Summary: {}", summary.summary);
+    println!("- Report: {}", summary.report);
+    println!("- Next stage: {}", summary.next_stage);
+}
+
+fn doctor_result_summary(report: &str) -> ResultSummary {
+    if report.contains("Project state: initialized") && report.contains("model credentials present")
+    {
+        ResultSummary {
+            summary: "Setup is ready.".into(),
+            report: "none".into(),
+            next_stage: "run `ai-human ask`, `ai-human plan`, or `ai-human impact`".into(),
+        }
+    } else {
+        ResultSummary {
+            summary: "Setup is not ready.".into(),
+            report: "none".into(),
+            next_stage: first_doctor_next_command(report)
+                .unwrap_or_else(|| "fix the blocking setup issue listed above".into()),
+        }
+    }
+}
+
+fn first_doctor_next_command(report: &str) -> Option<String> {
+    report.lines().find_map(|line| {
+        line.trim()
+            .strip_prefix("- Run `")
+            .and_then(|value| value.strip_suffix("`."))
+            .map(|command| format!("run `{command}`"))
+    })
 }
 
 fn first_next_stage(markdown: &str) -> Option<String> {

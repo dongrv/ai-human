@@ -43,7 +43,12 @@ fn init_runs_workflow_and_prints_confirmation() {
     cmd.args(["init", "--project-root", temp.path().to_str().unwrap()])
         .assert()
         .success()
-        .stdout(predicate::str::contains("ai-human project initialized"));
+        .stdout(predicate::str::contains("ai-human project initialized"))
+        .stdout(predicate::str::contains("## Result Summary"))
+        .stdout(predicate::str::contains("- Summary: Project initialized."))
+        .stdout(predicate::str::contains(
+            "- Next stage: run `ai-human doctor --project-root",
+        ));
 
     temp.child(".ai-human/config.toml")
         .assert(predicate::path::exists());
@@ -64,7 +69,12 @@ fn ask_uses_mock_agent_response_from_env() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("mock answer"));
+        .stdout(predicate::str::contains("mock answer"))
+        .stdout(predicate::str::contains("## Result Summary"))
+        .stdout(predicate::str::contains("- Summary: Answer generated."))
+        .stdout(predicate::str::contains(
+            "- Next stage: run `ai-human plan`, `ai-human impact`, or `ai-human learn`",
+        ));
 }
 
 #[test]
@@ -100,7 +110,12 @@ fn doctor_reports_uninitialized_project_with_next_command() {
         .stdout(predicate::str::contains(
             "missing `.ai-human/knowledge/README.md`",
         ))
-        .stdout(predicate::str::contains("ai-human init --project-root"));
+        .stdout(predicate::str::contains("ai-human init --project-root"))
+        .stdout(predicate::str::contains("## Result Summary"))
+        .stdout(predicate::str::contains("- Summary: Setup is not ready."))
+        .stdout(predicate::str::contains(
+            "- Next stage: run `ai-human init --project-root",
+        ));
 }
 
 #[test]
@@ -138,6 +153,11 @@ fn doctor_reports_initialized_project_and_model_env() {
         .stdout(predicate::str::contains("ai-human review"))
         .stdout(predicate::str::contains(
             "No blocking setup issues detected",
+        ))
+        .stdout(predicate::str::contains("## Result Summary"))
+        .stdout(predicate::str::contains("- Summary: Setup is ready."))
+        .stdout(predicate::str::contains(
+            "- Next stage: run `ai-human ask`, `ai-human plan`, or `ai-human impact`",
         ));
 }
 
@@ -161,7 +181,12 @@ fn ask_loads_mock_agent_response_from_project_env_file() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("mock answer from env file"));
+        .stdout(predicate::str::contains("mock answer from env file"))
+        .stdout(predicate::str::contains("## Result Summary"))
+        .stdout(predicate::str::contains("- Summary: Answer generated."))
+        .stdout(predicate::str::contains(
+            "- Next stage: run `ai-human plan`, `ai-human impact`, or `ai-human learn`",
+        ));
 }
 
 #[test]

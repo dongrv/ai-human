@@ -120,7 +120,7 @@ Reports use `Next stage:` entries to connect the normal loop:
 plan -> impact -> review -> fix dry-run -> fix --apply -> learn
 ```
 
-Report-producing commands also print a compact result summary after `Report written to ...`, so the next task is visible even when the full Markdown scrolls past:
+Successful commands print a compact result summary so the next task is visible without reading the full output. Report-producing commands print it after `Report written to ...`:
 
 ```text
 ## Result Summary
