@@ -131,17 +131,53 @@ async fn main() -> Result<()> {
 fn print_workflow_report(report: &WorkflowReport) {
     println!("{}", report.markdown);
     println!("Report written to {}", report.path);
-    if let Some(next_stage) = first_next_stage(&report.markdown) {
-        println!("{next_stage}");
-    }
+    println!("## Result Summary");
+    println!("- Summary: {}", report_summary(&report.markdown));
+    println!("- Report: {}", report.path);
+    println!(
+        "- Next stage: {}",
+        first_next_stage(&report.markdown).unwrap_or_else(|| "Review the report.".into())
+    );
 }
 
 fn first_next_stage(markdown: &str) -> Option<String> {
     markdown.lines().find_map(|line| {
         line.trim()
             .strip_prefix("- Next stage: ")
-            .map(|action| format!("Next stage: {action}"))
+            .map(|action| action.to_string())
     })
+}
+
+fn report_summary(markdown: &str) -> String {
+    markdown_section_first_text(markdown, "## Summary")
+        .or_else(|| markdown_title(markdown))
+        .unwrap_or_else(|| "Report generated.".into())
+}
+
+fn markdown_section_first_text(markdown: &str, heading: &str) -> Option<String> {
+    let mut in_section = false;
+
+    for line in markdown.lines() {
+        let trimmed = line.trim();
+        if trimmed == heading {
+            in_section = true;
+            continue;
+        }
+        if in_section && trimmed.starts_with("## ") {
+            return None;
+        }
+        if in_section && !trimmed.is_empty() {
+            return Some(trimmed.trim_start_matches("- ").into());
+        }
+    }
+
+    None
+}
+
+fn markdown_title(markdown: &str) -> Option<String> {
+    markdown
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("# ").map(str::to_string))
 }
 
 fn agent_from_env() -> Result<Box<dyn AgentClient>> {
