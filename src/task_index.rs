@@ -24,6 +24,18 @@ pub struct TaskTimeline {
     pub records: Vec<TaskRecord>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Continuation {
+    ReviewPath {
+        task_id: String,
+        path: String,
+    },
+    LearnSourceReport {
+        task_id: String,
+        source_report: String,
+    },
+}
+
 #[derive(Debug, Clone)]
 pub struct TaskIndex {
     project_root: PathBuf,
@@ -134,6 +146,27 @@ pub fn render_task_timeline(timeline: &TaskTimeline) -> String {
     markdown
 }
 
+pub fn continuation_from_timeline(timeline: &TaskTimeline) -> Option<Continuation> {
+    let latest = timeline.records.last()?;
+
+    match latest.task_type {
+        TaskType::ImpactAnalysis => path_hint(&latest.input).map(|path| Continuation::ReviewPath {
+            task_id: timeline.task_id.clone(),
+            path,
+        }),
+        TaskType::SmallFix => {
+            latest
+                .report_path
+                .as_ref()
+                .map(|source_report| Continuation::LearnSourceReport {
+                    task_id: timeline.task_id.clone(),
+                    source_report: source_report.clone(),
+                })
+        }
+        _ => None,
+    }
+}
+
 fn suggested_command(timeline: &TaskTimeline) -> Option<String> {
     let latest = timeline.records.last()?;
     let task_id = shell_arg(&timeline.task_id);
@@ -143,16 +176,15 @@ fn suggested_command(timeline: &TaskTimeline) -> Option<String> {
             "ai-human impact --task-id {task_id} --input {}",
             quoted_arg(&latest.input)
         )),
-        TaskType::ImpactAnalysis => latest
-            .report_path
-            .as_ref()
-            .and_then(|_| path_hint(&latest.input))
-            .map(|path| {
+        TaskType::ImpactAnalysis => match continuation_from_timeline(timeline) {
+            Some(Continuation::ReviewPath { path, .. }) => Some(
                 format!(
                     "ai-human review --task-id {task_id} --path {}",
                     shell_arg(&path)
-                )
-            }),
+                ),
+            ),
+            _ => None,
+        },
         TaskType::CodeReview => path_hint(&latest.input).map(|path| {
             format!(
                 "ai-human fix --task-id {task_id} --input {} --path {}",
@@ -160,12 +192,13 @@ fn suggested_command(timeline: &TaskTimeline) -> Option<String> {
                 shell_arg(&path)
             )
         }),
-        TaskType::SmallFix => latest.report_path.as_ref().map(|report_path| {
-            format!(
+        TaskType::SmallFix => match continuation_from_timeline(timeline) {
+            Some(Continuation::LearnSourceReport { source_report, .. }) => Some(format!(
                 "ai-human learn --task-id {task_id} --input \"Capture the reusable lesson from this task.\" --source-report {}",
-                shell_arg(report_path)
-            )
-        }),
+                shell_arg(&source_report)
+            )),
+            _ => None,
+        },
         TaskType::Ask | TaskType::Learn => None,
     }
 }

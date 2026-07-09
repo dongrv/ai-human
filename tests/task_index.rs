@@ -1,7 +1,9 @@
 use chrono::Utc;
 
 use ai_human::core::task::{TaskRecord, TaskStatus, TaskType};
-use ai_human::task_index::{render_task_timeline, CompletedTaskReport, TaskIndex};
+use ai_human::task_index::{
+    continuation_from_timeline, render_task_timeline, CompletedTaskReport, Continuation, TaskIndex,
+};
 
 #[tokio::test]
 async fn appends_and_loads_task_timeline_records() {
@@ -123,6 +125,48 @@ fn renders_fix_timeline_with_learn_continuation_command() {
     assert!(markdown.contains(
         "- Suggested command: `ai-human learn --task-id pay-audit-001 --input \"Capture the reusable lesson from this task.\" --source-report .ai-human/reports/pay-audit-001-fix-apply.md`"
     ));
+}
+
+#[test]
+fn continuation_from_impact_task_returns_review_path() {
+    let timeline = ai_human::task_index::TaskTimeline {
+        task_id: "pay-audit-001".into(),
+        records: vec![task_record(
+            TaskType::ImpactAnalysis,
+            "check library impact\nPATH: src/lib.rs",
+            "Mock impact",
+            ".ai-human/reports/pay-audit-001-impact.md",
+        )],
+    };
+
+    assert_eq!(
+        continuation_from_timeline(&timeline),
+        Some(Continuation::ReviewPath {
+            task_id: "pay-audit-001".into(),
+            path: "src/lib.rs".into(),
+        })
+    );
+}
+
+#[test]
+fn continuation_from_fix_task_returns_learn_source_report() {
+    let timeline = ai_human::task_index::TaskTimeline {
+        task_id: "pay-audit-001".into(),
+        records: vec![task_record(
+            TaskType::SmallFix,
+            "Fix missing nil guard\nPATH: src/lib.rs",
+            "Applied nil guard.",
+            ".ai-human/reports/pay-audit-001-fix-apply.md",
+        )],
+    };
+
+    assert_eq!(
+        continuation_from_timeline(&timeline),
+        Some(Continuation::LearnSourceReport {
+            task_id: "pay-audit-001".into(),
+            source_report: ".ai-human/reports/pay-audit-001-fix-apply.md".into(),
+        })
+    );
 }
 
 fn task_record(task_type: TaskType, input: &str, summary: &str, report_path: &str) -> TaskRecord {

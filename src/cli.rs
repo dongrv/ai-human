@@ -88,6 +88,9 @@ pub struct ReviewArgs {
     #[arg(long, help = "Optional task id used to connect related reports")]
     pub task_id: Option<String>,
 
+    #[arg(long, help = "Inherit review source and task id from a previous task")]
+    pub from_task: Option<String>,
+
     #[arg(long)]
     pub diff_file: Option<PathBuf>,
 
@@ -109,6 +112,9 @@ pub struct LearnArgs {
 
     #[arg(long, help = "Optional task id used to connect related reports")]
     pub task_id: Option<String>,
+
+    #[arg(long, help = "Inherit task id and source report from a previous task")]
+    pub from_task: Option<String>,
 
     #[arg(
         long,

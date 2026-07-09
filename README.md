@@ -122,6 +122,15 @@ cargo run -- task --id pay-audit-001
 
 The task command reads `.ai-human/memory/tasks.jsonl`, prints the reports recorded for that task id, and suggests the next continuation step. When enough context is available, it also prints a `Suggested command:` line that can be copied directly, such as `ai-human review --task-id pay-audit-001 --path service/pay/audit.go`. It does not call the model.
 
+Some commands can inherit task context directly:
+
+```powershell
+cargo run -- review --from-task pay-audit-001
+cargo run -- learn --from-task pay-audit-001 --input "Capture the reusable lesson from this task."
+```
+
+`review --from-task` uses the latest impact record for that task and inherits its path. `learn --from-task` uses the latest fix report as `--source-report`. Explicit source options such as `--path`, `--diff-file`, `--task-id`, or `--source-report` are rejected when they conflict with `--from-task`.
+
 Reports use `Next stage:` entries to connect the normal loop:
 
 ```text

@@ -17,7 +17,10 @@ use ai_human::config::load_project_config;
 use ai_human::core::task::{TaskId, TaskType};
 use ai_human::env::load_project_env;
 use ai_human::metrics::{CommandMetric, CommandStatus, MetricsStore};
-use ai_human::task_index::{render_task_timeline, CompletedTaskReport, TaskIndex, TaskTimeline};
+use ai_human::task_index::{
+    continuation_from_timeline, render_task_timeline, CompletedTaskReport, Continuation, TaskIndex,
+    TaskTimeline,
+};
 use ai_human::workflow::ask::AskWorkflow;
 use ai_human::workflow::doctor::DoctorWorkflow;
 use ai_human::workflow::fix::{FixRequest, FixWorkflow};
@@ -133,9 +136,14 @@ async fn run(cli: Cli) -> Result<CommandOutcome> {
             let project_root = args.project_root;
             load_project_env(&project_root)?;
             let workflow = ReviewWorkflow::new(project_root.clone(), agent_from_env()?);
-            let task_id = TaskId::from_user_input(args.task_id);
+            let inherited =
+                review_inheritance(&project_root, &args.from_task, &args.path, &args.diff_file)
+                    .await?;
+            let task_id =
+                TaskId::from_user_input(args.task_id.or_else(|| inherited.task_id.clone()));
             let started_at = Utc::now();
-            let (input, report) = match (args.diff_file, args.path) {
+            let review_path = args.path.or(inherited.path);
+            let (input, report) = match (args.diff_file, review_path) {
                 (Some(diff_file), None) => {
                     let input = format!("DIFF FILE: {}", diff_file.display());
                     let report = workflow
@@ -171,14 +179,21 @@ async fn run(cli: Cli) -> Result<CommandOutcome> {
         Command::Learn(args) => {
             let project_root = args.project_root;
             load_project_env(&project_root)?;
+            let inherited = learn_inheritance(
+                &project_root,
+                &args.from_task,
+                &args.task_id,
+                &args.source_report,
+            )
+            .await?;
             let request = LearnRequest {
                 input: args.input,
                 category: args.category,
                 target: args.target,
-                source_report: args.source_report,
+                source_report: args.source_report.or(inherited.source_report),
             };
             let input = request.input.clone();
-            let task_id = TaskId::from_user_input(args.task_id);
+            let task_id = TaskId::from_user_input(args.task_id.or(inherited.task_id));
             let started_at = Utc::now();
             let report = LearnWorkflow::new(project_root.clone(), agent_from_env()?)
                 .run_with_task_id(request, task_id.clone())
@@ -303,12 +318,16 @@ impl MetricContext {
             Command::Impact(args) => {
                 Self::new("impact", args.project_root.clone(), args.task_id.clone())
             }
-            Command::Review(args) => {
-                Self::new("review", args.project_root.clone(), args.task_id.clone())
-            }
-            Command::Learn(args) => {
-                Self::new("learn", args.project_root.clone(), args.task_id.clone())
-            }
+            Command::Review(args) => Self::new(
+                "review",
+                args.project_root.clone(),
+                args.task_id.clone().or_else(|| args.from_task.clone()),
+            ),
+            Command::Learn(args) => Self::new(
+                "learn",
+                args.project_root.clone(),
+                args.task_id.clone().or_else(|| args.from_task.clone()),
+            ),
             Command::Fix(args) => Self::new("fix", args.project_root.clone(), args.task_id.clone()),
             Command::Task(args) => {
                 Self::new("task", args.project_root.clone(), Some(args.id.clone()))
@@ -368,6 +387,79 @@ fn task_result_summary(timeline: &TaskTimeline) -> ResultSummary {
         summary,
         report: "none".into(),
         next_stage,
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct ReviewInheritance {
+    task_id: Option<String>,
+    path: Option<PathBuf>,
+}
+
+async fn review_inheritance(
+    project_root: &Path,
+    from_task: &Option<String>,
+    path: &Option<PathBuf>,
+    diff_file: &Option<PathBuf>,
+) -> Result<ReviewInheritance> {
+    let Some(task_id) = from_task else {
+        return Ok(ReviewInheritance::default());
+    };
+    if path.is_some() || diff_file.is_some() {
+        bail!(
+            "use either --from-task or an explicit review source, not both. Next: remove --path/--diff-file or remove --from-task."
+        );
+    }
+
+    let timeline = TaskIndex::new(project_root).load(task_id).await?;
+    match continuation_from_timeline(&timeline) {
+        Some(Continuation::ReviewPath { task_id, path }) => Ok(ReviewInheritance {
+            task_id: Some(task_id),
+            path: Some(PathBuf::from(path)),
+        }),
+        _ => bail!(
+            "task `{}` does not have an inheritable review source. Next: run `ai-human task --id {}` and follow its Suggested command, or pass --path explicitly.",
+            task_id,
+            task_id
+        ),
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct LearnInheritance {
+    task_id: Option<String>,
+    source_report: Option<PathBuf>,
+}
+
+async fn learn_inheritance(
+    project_root: &Path,
+    from_task: &Option<String>,
+    task_id: &Option<String>,
+    source_report: &Option<PathBuf>,
+) -> Result<LearnInheritance> {
+    let Some(from_task_id) = from_task else {
+        return Ok(LearnInheritance::default());
+    };
+    if task_id.is_some() || source_report.is_some() {
+        bail!(
+            "use either --from-task or explicit task/source options, not both. Next: remove --task-id/--source-report or remove --from-task."
+        );
+    }
+
+    let timeline = TaskIndex::new(project_root).load(from_task_id).await?;
+    match continuation_from_timeline(&timeline) {
+        Some(Continuation::LearnSourceReport {
+            task_id,
+            source_report,
+        }) => Ok(LearnInheritance {
+            task_id: Some(task_id),
+            source_report: Some(PathBuf::from(source_report)),
+        }),
+        _ => bail!(
+            "task `{}` does not have an inheritable learning source report. Next: run `ai-human task --id {}` and follow its Suggested command, or pass --source-report explicitly.",
+            from_task_id,
+            from_task_id
+        ),
     }
 }
 
