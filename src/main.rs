@@ -75,8 +75,12 @@ async fn main() -> Result<()> {
                         .await?
                 }
                 (None, Some(path)) => workflow.run_path_with_task_id(path, task_id).await?,
-                (Some(_), Some(_)) => bail!("use either --diff-file or --path, not both"),
-                (None, None) => bail!("review requires --diff-file or --path"),
+                (Some(_), Some(_)) => bail!(
+                    "use either --diff-file or --path, not both. Next: choose one review source."
+                ),
+                (None, None) => bail!(
+                    "review requires --diff-file or --path. Next: pass --path path/to/file or --diff-file path/to/change.diff."
+                ),
             };
             println!("{}", report.markdown);
             println!("Report written to {}", report.path);

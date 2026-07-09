@@ -27,27 +27,27 @@ pub mod fs {
 
             let metadata = fs::symlink_metadata(&path).await.with_context(|| {
                 format!(
-                    "path must reference an existing project file: {}",
+                    "path must reference an existing project file: {}. Next: pass an existing path under --project-root.",
                     requested_path.display()
                 )
             })?;
             let file_type = metadata.file_type();
             if file_type.is_symlink() || !file_type.is_file() {
                 bail!(
-                    "path must reference a regular project file: {}",
+                    "path must reference a regular project file: {}. Next: pass a regular source or report file path.",
                     requested_path.display()
                 );
             }
 
             let canonical_path = fs::canonicalize(&path).await.with_context(|| {
                 format!(
-                    "path must reference an existing project file: {}",
+                    "path must reference an existing project file: {}. Next: pass an existing path under --project-root.",
                     requested_path.display()
                 )
             })?;
             if !canonical_path.starts_with(&canonical_root) {
                 bail!(
-                    "path must stay inside project root: {}. Use --project-root to choose the intended workspace.",
+                    "path must stay inside project root: {}. Next: pass a path under --project-root or use --project-root to choose the intended workspace.",
                     requested_path.display()
                 );
             }
@@ -115,14 +115,14 @@ pub mod fs {
                 let file_type = metadata.file_type();
                 if file_type.is_symlink() || !file_type.is_file() {
                     bail!(
-                        "path must reference a regular project file for write: {}",
+                        "path must reference a regular project file for write: {}. Next: choose a regular file under --project-root.",
                         relative_path.display()
                     );
                 }
                 let canonical_path = fs::canonicalize(&path).await?;
                 if !canonical_path.starts_with(&canonical_root) {
                     bail!(
-                        "path must stay inside project root: {}",
+                        "path must stay inside project root: {}. Next: choose a relative path under --project-root.",
                         relative_path.display()
                     );
                 }
@@ -130,7 +130,7 @@ pub mod fs {
                 let canonical_parent = fs::canonicalize(parent).await?;
                 if !canonical_parent.starts_with(&canonical_root) {
                     bail!(
-                        "path must stay inside project root: {}",
+                        "path must stay inside project root: {}. Next: choose a relative path under --project-root.",
                         relative_path.display()
                     );
                 }
@@ -148,17 +148,23 @@ pub mod fs {
 
     fn validate_safe_relative_path(path: &Path) -> Result<()> {
         if path.as_os_str().is_empty() {
-            bail!("path must not be empty");
+            bail!("path must not be empty. Next: pass a project-relative path.");
         }
         if path.is_absolute() {
-            bail!("path must be relative to project root: {}", path.display());
+            bail!(
+                "path must be relative to project root: {}. Next: pass a relative path under --project-root.",
+                path.display()
+            );
         }
         for component in path.components() {
             match component {
                 Component::Normal(_) => {}
                 Component::CurDir => {}
                 Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
-                    bail!("path must stay inside project root: {}", path.display());
+                    bail!(
+                        "path must stay inside project root: {}. Next: remove parent directory traversal and pass a path under --project-root.",
+                        path.display()
+                    );
                 }
             }
         }

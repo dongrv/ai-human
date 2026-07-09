@@ -770,7 +770,7 @@ pub mod learn {
             "faq" | "question" | "questions" => Ok(".ai-human/knowledge/faq.md"),
             "case" | "cases" => Ok(".ai-human/knowledge/cases/learned-cases.md"),
             _ => bail!(
-                "unknown learning target `{raw}`. Use --target engineering-rules, --target faq, or --target case."
+                "unknown learning target `{raw}`. Next: use --target engineering-rules, --target faq, or --target case."
             ),
         }
     }
@@ -965,27 +965,27 @@ Return only JSON matching this schema:
 
         let metadata = fs::symlink_metadata(&path).await.with_context(|| {
             format!(
-                "path must reference an existing project file: {}",
+                "path must reference an existing project file: {}. Next: pass an existing path under --project-root.",
                 requested_path.display()
             )
         })?;
         let file_type = metadata.file_type();
         if file_type.is_symlink() || !file_type.is_file() {
             bail!(
-                "path must reference a regular project file: {}",
+                "path must reference a regular project file: {}. Next: pass a regular source or diff file path.",
                 requested_path.display()
             );
         }
 
         let canonical_path = fs::canonicalize(&path).await.with_context(|| {
             format!(
-                "path must reference an existing project file: {}",
+                "path must reference an existing project file: {}. Next: pass an existing path under --project-root.",
                 requested_path.display()
             )
         })?;
         if !canonical_path.starts_with(&canonical_root) {
             bail!(
-                "path must stay inside project root: {}",
+                "path must stay inside project root: {}. Next: pass a path under --project-root, for example --path service/pay/audit.go.",
                 requested_path.display()
             );
         }

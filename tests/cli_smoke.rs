@@ -379,7 +379,8 @@ fn review_errors_when_path_is_missing() {
     .failure()
     .stderr(predicate::str::contains(
         "path must reference an existing project file",
-    ));
+    ))
+    .stderr(predicate::str::contains("Next:"));
 }
 
 #[test]
@@ -407,7 +408,8 @@ fn review_errors_when_both_diff_file_and_path_are_provided() {
     .failure()
     .stderr(predicate::str::contains(
         "use either --diff-file or --path, not both",
-    ));
+    ))
+    .stderr(predicate::str::contains("Next:"));
 }
 
 #[test]
@@ -424,7 +426,8 @@ fn review_errors_when_neither_diff_file_nor_path_is_provided() {
     .failure()
     .stderr(predicate::str::contains(
         "review requires --diff-file or --path",
-    ));
+    ))
+    .stderr(predicate::str::contains("Next:"));
 }
 
 #[test]

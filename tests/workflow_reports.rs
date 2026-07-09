@@ -342,6 +342,7 @@ async fn review_workflow_rejects_diff_file_outside_project_root() {
         .to_string();
 
     assert!(error.contains("path must stay inside project root"));
+    assert!(error.contains("Next:"));
 }
 
 #[tokio::test]
@@ -480,6 +481,35 @@ async fn learn_report_includes_task_id_and_unified_sections() {
     assert!(report
         .markdown
         .contains("Next stage: run `ai-human ask`, `ai-human plan`, or `ai-human review`"));
+}
+
+#[tokio::test]
+async fn learn_workflow_rejects_unknown_target_with_next_action() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "title":"Payment audit ownership",
+        "category":"rule",
+        "summary":"Audit rules have a single owner.",
+        "rule":"Payment audit rules are owned by service/pay.",
+        "evidence":["Team review conclusion"],
+        "applies_to":["service/pay"],
+        "target_doc":"unknown-target"
+    }"#
+    .into()]);
+
+    let error = LearnWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run(LearnRequest {
+            input: "Payment audit rules are owned by service/pay.".into(),
+            category: "rule".into(),
+            target: Some("unknown-target".into()),
+            source_report: None,
+        })
+        .await
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("unknown learning target"));
+    assert!(error.contains("Next:"));
 }
 
 #[tokio::test]
@@ -710,6 +740,7 @@ async fn fix_workflow_rejects_missing_target_file_before_model_call() {
         .to_string();
 
     assert!(error.contains("path must reference an existing project file"));
+    assert!(error.contains("Next:"));
 }
 
 #[tokio::test]
