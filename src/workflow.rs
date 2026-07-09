@@ -422,6 +422,7 @@ pub mod fix {
             task_id: TaskId,
         ) -> Result<WorkflowReport> {
             let output = self.build_plan(&request).await?;
+            reject_high_risk_apply(&output)?;
             let replacement = replacement_for_requested_path(&output, &request)?;
             let fs = ProjectFs::new(self.project_root.clone());
             let written_path = fs.write_text(&request.path, &replacement.contents).await?;
@@ -510,6 +511,16 @@ pub mod fix {
         }
 
         Ok(matches[0])
+    }
+
+    fn reject_high_risk_apply(output: &FixPlanOutput) -> Result<()> {
+        if output.risk_level.trim().eq_ignore_ascii_case("high") {
+            bail!(
+                "high risk fix apply is blocked. Next: keep this as a fix dry-run, split the change, or get human review before applying manually."
+            );
+        }
+
+        Ok(())
     }
 
     fn command_result_to_verification(result: CommandResult) -> VerificationResult {

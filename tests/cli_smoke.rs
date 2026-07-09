@@ -564,6 +564,37 @@ fn fix_apply_uses_mock_agent_and_modifies_target_file() {
 }
 
 #[test]
+fn fix_apply_blocks_high_risk_mock_plan_and_keeps_target_file() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("src/lib.rs")
+        .write_str("pub fn value() -> i32 { 1 }\n")
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"summary":"Change protocol and persistence behavior.","target_files":["src/lib.rs"],"change_intent":"Change behavior with production protocol risk.","risk_level":"high","risks":["Protocol compatibility and persistence ownership need human review"],"verification_commands":[],"replacement_files":[{"path":"src/lib.rs","contents":"pub fn value() -> i32 { 2 }\n"}],"open_questions":["Who owns the migration?"]}"#,
+    )
+    .args([
+        "fix",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--input",
+        "Change value with high risk",
+        "--path",
+        "src/lib.rs",
+        "--apply",
+    ])
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("high risk"))
+    .stderr(predicate::str::contains("fix dry-run"));
+
+    temp.child("src/lib.rs")
+        .assert("pub fn value() -> i32 { 1 }\n");
+}
+
+#[test]
 fn fix_help_describes_current_apply_behavior() {
     let mut cmd = Command::cargo_bin("ai-human").unwrap();
 

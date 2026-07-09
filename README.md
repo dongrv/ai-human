@@ -179,6 +179,8 @@ cargo run -- fix --input "Fix missing nil guard in payment audit parser" --path 
 
 `fix --apply` writes only the file named by `--path`, only when the model returns a matching replacement for that exact file. Verification and formatting commands are executed only when supplied by CLI flags, not because the model suggested them. Apply mode prints a `# Fix Apply Report`, writes a report ending in `-fix-apply.md`, lists written files, and includes command results.
 
+High-risk fix plans are blocked in apply mode. When the model returns `risk_level: "high"`, AI Human keeps the target file unchanged and asks you to keep the output as a dry-run, split the change, or get human review before applying manually.
+
 ## Safety Boundary
 
 AI Human does not perform non-model operational side effects such as auto-commit, push, deploy, production config mutation, file deletion, or database changes. Real model calls are external provider actions and may transmit prompt context as described above. Local write workflows are limited to explicit workflow outputs such as `.ai-human/` initialization, generated reports, knowledge files, memory files, and `fix --apply` writes to one explicit project file.

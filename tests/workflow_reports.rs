@@ -763,6 +763,44 @@ async fn fix_apply_rejects_replacement_for_different_path() {
 }
 
 #[tokio::test]
+async fn fix_apply_blocks_high_risk_plan_before_writing_file() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("src/lib.rs")
+        .write_str("pub fn value() -> i32 { 1 }\n")
+        .unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "summary":"Change protocol and persistence behavior.",
+        "target_files":["src/lib.rs"],
+        "change_intent":"Change behavior with production protocol risk.",
+        "risk_level":"high",
+        "risks":["Protocol compatibility and persistence ownership need human review"],
+        "verification_commands":[],
+        "replacement_files":[{"path":"src/lib.rs","contents":"pub fn value() -> i32 { 2 }\n"}],
+        "open_questions":["Who owns the migration?"]
+    }"#
+    .into()]);
+
+    let error = FixWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run_apply(FixRequest {
+            input: "Change value with high risk".into(),
+            path: "src/lib.rs".into(),
+            verify_commands: vec![],
+            format_command: None,
+        })
+        .await
+        .unwrap_err()
+        .to_string();
+
+    let target = tokio::fs::read_to_string(temp.path().join("src/lib.rs"))
+        .await
+        .unwrap();
+
+    assert_eq!(target, "pub fn value() -> i32 { 1 }\n");
+    assert!(error.contains("high risk"));
+    assert!(error.contains("fix dry-run"));
+}
+
+#[tokio::test]
 async fn review_workflow_reads_file_content_from_path() {
     let temp = assert_fs::TempDir::new().unwrap();
     temp.child("src/lib.rs")
