@@ -7,6 +7,7 @@ use ai_human::agent::AgentClient;
 use ai_human::cli::{Cli, Command};
 use ai_human::env::load_project_env;
 use ai_human::workflow::ask::AskWorkflow;
+use ai_human::workflow::doctor::DoctorWorkflow;
 use ai_human::workflow::fix::{FixRequest, FixWorkflow};
 use ai_human::workflow::impact::ImpactWorkflow;
 use ai_human::workflow::init::InitWorkflow;
@@ -34,6 +35,11 @@ async fn main() -> Result<()> {
                 .run(&args.input)
                 .await?;
             println!("{answer}");
+        }
+        Command::Doctor(args) => {
+            load_project_env(&args.project_root)?;
+            let report = DoctorWorkflow::new(args.project_root).run().await?;
+            println!("{report}");
         }
         Command::Plan(args) => {
             load_project_env(&args.project_root)?;

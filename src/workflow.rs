@@ -83,6 +83,108 @@ pub mod ask {
     const ASK_SYSTEM_PROMPT: &str = "You are AI Digital Human V1. Answer using the supplied project context. If context is insufficient, say what is missing.";
 }
 
+pub mod doctor {
+    use std::path::{Path, PathBuf};
+
+    use anyhow::Result;
+    use tokio::fs;
+
+    #[derive(Debug, Clone)]
+    pub struct DoctorWorkflow {
+        project_root: PathBuf,
+    }
+
+    impl DoctorWorkflow {
+        pub fn new(project_root: PathBuf) -> Self {
+            Self { project_root }
+        }
+
+        pub async fn run(&self) -> Result<String> {
+            let initialized = required_paths_exist(&self.project_root).await?;
+            let mut markdown = String::new();
+
+            markdown.push_str("# AI Human Doctor\n\n");
+            markdown.push_str("## Project\n\n");
+            markdown.push_str(&format!(
+                "- Project root: {}\n",
+                self.project_root.display()
+            ));
+            if initialized {
+                markdown.push_str("- Project state: initialized\n\n");
+            } else {
+                markdown.push_str("- Project state: not initialized\n\n");
+            }
+
+            markdown.push_str("## Model\n\n");
+            markdown.push_str(&model_status());
+            markdown.push('\n');
+
+            markdown.push_str("## Next\n\n");
+            if initialized && model_ready() {
+                markdown.push_str("- No blocking setup issues detected.\n");
+                markdown.push_str(
+                    "- Try `ai-human ask --input \"Which module owns this workflow?\"`.\n",
+                );
+            } else {
+                if !initialized {
+                    markdown.push_str(&format!(
+                        "- Run `ai-human init --project-root {}`.\n",
+                        self.project_root.display()
+                    ));
+                }
+                if !model_ready() {
+                    markdown.push_str("- Set `OPENAI_API_KEY` in your shell or project `.env`.\n");
+                }
+            }
+
+            Ok(markdown)
+        }
+    }
+
+    async fn required_paths_exist(project_root: &Path) -> Result<bool> {
+        for path in [
+            ".ai-human/config.toml",
+            ".ai-human/knowledge/README.md",
+            ".ai-human/memory/tasks.jsonl",
+            ".ai-human/reports",
+        ] {
+            if !fs::try_exists(project_root.join(path)).await? {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
+    }
+
+    fn model_status() -> String {
+        let mut status = String::new();
+
+        if std::env::var_os("AI_HUMAN_MOCK_RESPONSE").is_some() {
+            status.push_str("- AI_HUMAN_MOCK_RESPONSE configured\n");
+        }
+        if std::env::var_os("OPENAI_API_KEY").is_some() {
+            status.push_str("- OPENAI_API_KEY configured\n");
+        } else {
+            status.push_str("- OPENAI_API_KEY missing\n");
+        }
+
+        let provider = std::env::var("AI_HUMAN_MODEL_PROVIDER").unwrap_or_else(|_| "openai".into());
+        let model = std::env::var("AI_HUMAN_MODEL").unwrap_or_else(|_| "gpt-4o-mini".into());
+        let wire_api =
+            std::env::var("AI_HUMAN_OPENAI_WIRE_API").unwrap_or_else(|_| "responses".into());
+        status.push_str(&format!("- Provider: {provider}\n"));
+        status.push_str(&format!("- Model: {model}\n"));
+        status.push_str(&format!("- Wire API: {wire_api}\n"));
+
+        status
+    }
+
+    fn model_ready() -> bool {
+        std::env::var_os("AI_HUMAN_MOCK_RESPONSE").is_some()
+            || std::env::var_os("OPENAI_API_KEY").is_some()
+    }
+}
+
 pub mod plan {
     use std::path::PathBuf;
 

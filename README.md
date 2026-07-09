@@ -5,6 +5,7 @@ AI Human is a Rust rig-powered CLI digital human for service-side engineering wo
 ## MVP Capabilities
 
 - Initialize project-owned `.ai-human/` configuration, policy, knowledge, memory, report, and template folders.
+- Check project setup and model configuration with a no-network doctor workflow.
 - Load local project rules, Markdown knowledge, README-style context, and referenced source paths.
 - Answer project questions with the `ask` workflow.
 - Produce structured requirement plans with goals, non-goals, affected areas, risks, verification steps, and open questions.
@@ -20,6 +21,12 @@ Initialize AI Human metadata in the current project:
 
 ```powershell
 cargo run -- init --project-root .
+```
+
+Check setup before calling a model:
+
+```powershell
+cargo run -- doctor --project-root .
 ```
 
 Ask a context-aware engineering question:
@@ -76,6 +83,16 @@ $env:AI_HUMAN_MOCK_RESPONSE='{"title":"Mock Plan","goal":"Verify CLI wiring","no
 cargo run -- plan --input "verify cli wiring"
 Remove-Item Env:\AI_HUMAN_MOCK_RESPONSE
 ```
+
+## Doctor Example
+
+Check whether `.ai-human/` exists and model configuration is visible:
+
+```powershell
+cargo run -- doctor --project-root .
+```
+
+The doctor workflow does not call the model. It prints project state, model environment status, selected provider/model/wire API, and the next command to run when setup is incomplete.
 
 ## Plan Example
 

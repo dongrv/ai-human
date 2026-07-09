@@ -9,11 +9,14 @@ fn root_help_lists_core_commands() {
         .assert()
         .success()
         .stdout(predicate::str::contains("init"))
+        .stdout(predicate::str::contains("doctor"))
         .stdout(predicate::str::contains("plan"))
         .stdout(predicate::str::contains("impact"))
         .stdout(predicate::str::contains("review"))
         .stdout(predicate::str::contains("learn"))
-        .stdout(predicate::str::contains("fix"));
+        .stdout(predicate::str::contains("fix"))
+        .stdout(predicate::str::contains("Check project setup"))
+        .stdout(predicate::str::contains("Preview or apply"));
 }
 
 #[test]
@@ -55,6 +58,55 @@ fn ask_uses_mock_agent_response_from_env() {
         .assert()
         .success()
         .stdout(predicate::str::contains("mock answer"));
+}
+
+#[test]
+fn doctor_reports_uninitialized_project_with_next_command() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env_remove("AI_HUMAN_MOCK_RESPONSE")
+        .env_remove("OPENAI_API_KEY")
+        .env_remove("OPENAI_BASE_URL")
+        .env_remove("AI_HUMAN_OPENAI_WIRE_API")
+        .args(["doctor", "--project-root", temp.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("# AI Human Doctor"))
+        .stdout(predicate::str::contains("Project state"))
+        .stdout(predicate::str::contains("not initialized"))
+        .stdout(predicate::str::contains("ai-human init --project-root"));
+}
+
+#[test]
+fn doctor_reports_initialized_project_and_model_env() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child(".ai-human/config.toml").write_str("").unwrap();
+    temp.child(".ai-human/knowledge/README.md")
+        .write_str("# Knowledge")
+        .unwrap();
+    temp.child(".ai-human/memory/tasks.jsonl")
+        .write_str("")
+        .unwrap();
+    temp.child(".ai-human/reports/.keep").write_str("").unwrap();
+    temp.child(".env")
+        .write_str("OPENAI_API_KEY=test-key\nAI_HUMAN_OPENAI_WIRE_API=responses\n")
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env_remove("AI_HUMAN_MOCK_RESPONSE")
+        .env_remove("OPENAI_API_KEY")
+        .env_remove("OPENAI_BASE_URL")
+        .env_remove("AI_HUMAN_OPENAI_WIRE_API")
+        .args(["doctor", "--project-root", temp.path().to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Project state: initialized"))
+        .stdout(predicate::str::contains("OPENAI_API_KEY configured"))
+        .stdout(predicate::str::contains("Wire API: responses"))
+        .stdout(predicate::str::contains(
+            "No blocking setup issues detected",
+        ));
 }
 
 #[test]
@@ -368,4 +420,18 @@ fn fix_apply_uses_mock_agent_and_modifies_target_file() {
 
     temp.child("src/lib.rs")
         .assert("pub fn value() -> i32 { 2 }\n");
+}
+
+#[test]
+fn fix_help_describes_current_apply_behavior() {
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.args(["fix", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Reserved for Phase 2C").not())
+        .stdout(predicate::str::contains("Apply a validated replacement"))
+        .stdout(predicate::str::contains(
+            "Single target file to analyze or update",
+        ));
 }
