@@ -16,6 +16,7 @@ use ai_human::workflow::init::InitWorkflow;
 use ai_human::workflow::learn::{LearnRequest, LearnWorkflow};
 use ai_human::workflow::plan::PlanWorkflow;
 use ai_human::workflow::review::ReviewWorkflow;
+use ai_human::workflow::WorkflowReport;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -48,8 +49,7 @@ async fn main() -> Result<()> {
             let report = PlanWorkflow::new(args.project_root, agent_from_env()?)
                 .run_with_task_id(&args.input, TaskId::from_user_input(args.task_id))
                 .await?;
-            println!("{}", report.markdown);
-            println!("Report written to {}", report.path);
+            print_workflow_report(&report);
         }
         Command::Impact(args) => {
             load_project_env(&args.project_root)?;
@@ -61,8 +61,7 @@ async fn main() -> Result<()> {
             let report = ImpactWorkflow::new(args.project_root, agent_from_env()?)
                 .run_with_task_id(&input, TaskId::from_user_input(args.task_id))
                 .await?;
-            println!("{}", report.markdown);
-            println!("Report written to {}", report.path);
+            print_workflow_report(&report);
         }
         Command::Review(args) => {
             load_project_env(&args.project_root)?;
@@ -82,8 +81,7 @@ async fn main() -> Result<()> {
                     "review requires --diff-file or --path. Next: pass --path path/to/file or --diff-file path/to/change.diff."
                 ),
             };
-            println!("{}", report.markdown);
-            println!("Report written to {}", report.path);
+            print_workflow_report(&report);
         }
         Command::Learn(args) => {
             load_project_env(&args.project_root)?;
@@ -98,8 +96,7 @@ async fn main() -> Result<()> {
                     TaskId::from_user_input(args.task_id),
                 )
                 .await?;
-            println!("{}", report.markdown);
-            println!("Report written to {}", report.path);
+            print_workflow_report(&report);
         }
         Command::Fix(args) => {
             load_project_env(&args.project_root)?;
@@ -124,12 +121,27 @@ async fn main() -> Result<()> {
             } else {
                 workflow.run_dry_run_with_task_id(request, task_id).await?
             };
-            println!("{}", report.markdown);
-            println!("Report written to {}", report.path);
+            print_workflow_report(&report);
         }
     }
 
     Ok(())
+}
+
+fn print_workflow_report(report: &WorkflowReport) {
+    println!("{}", report.markdown);
+    println!("Report written to {}", report.path);
+    if let Some(next_stage) = first_next_stage(&report.markdown) {
+        println!("{next_stage}");
+    }
+}
+
+fn first_next_stage(markdown: &str) -> Option<String> {
+    markdown.lines().find_map(|line| {
+        line.trim()
+            .strip_prefix("- Next stage: ")
+            .map(|action| format!("Next stage: {action}"))
+    })
 }
 
 fn agent_from_env() -> Result<Box<dyn AgentClient>> {

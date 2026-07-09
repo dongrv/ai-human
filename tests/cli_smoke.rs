@@ -197,6 +197,9 @@ fn plan_uses_mock_agent_and_prints_report_path() {
     .success()
     .stdout(predicate::str::contains("# Mock Plan"))
     .stdout(predicate::str::contains("Report written to "))
+    .stdout(predicate::str::is_match(
+        "(?s)Report written to .*Next stage: run `ai-human impact`",
+    ).unwrap())
     .stdout(predicate::str::contains("-plan.md"));
 }
 
@@ -250,6 +253,9 @@ fn impact_accepts_optional_path_and_prints_report_path() {
     .success()
     .stdout(predicate::str::contains("Mock impact"))
     .stdout(predicate::str::contains("Report written to "))
+    .stdout(predicate::str::is_match(
+        "(?s)Report written to .*Next stage: run `ai-human review`",
+    ).unwrap())
     .stdout(predicate::str::contains("-impact.md"));
 }
 
@@ -304,6 +310,10 @@ fn review_accepts_diff_file_and_prints_report_path() {
     .success()
     .stdout(predicate::str::contains("Mock review"))
     .stdout(predicate::str::contains("Report written to "))
+    .stdout(
+        predicate::str::is_match("(?s)Report written to .*Next stage: run `ai-human learn`")
+            .unwrap(),
+    )
     .stdout(predicate::str::contains("-review.md"));
 }
 
@@ -330,6 +340,10 @@ fn review_accepts_path_and_prints_report_path() {
     .success()
     .stdout(predicate::str::contains("Mock file review"))
     .stdout(predicate::str::contains("Report written to "))
+    .stdout(
+        predicate::str::is_match("(?s)Report written to .*Next stage: run `ai-human learn`")
+            .unwrap(),
+    )
     .stdout(predicate::str::contains("-review.md"));
 }
 
@@ -454,6 +468,9 @@ fn learn_uses_mock_agent_and_prints_written_paths() {
     ))
     .stdout(predicate::str::contains("Source code files modified: no"))
     .stdout(predicate::str::contains("Report written to "))
+    .stdout(predicate::str::is_match(
+        "(?s)Report written to .*Next stage: run `ai-human ask`, `ai-human plan`, or `ai-human review`",
+    ).unwrap())
     .stdout(predicate::str::contains("-learn.md"));
 
     temp.child(".ai-human/knowledge/engineering-rules.md")
@@ -513,6 +530,9 @@ fn fix_uses_mock_agent_and_prints_dry_run_report() {
     .stdout(predicate::str::contains("# Fix Dry Run"))
     .stdout(predicate::str::contains("Source code files modified: no"))
     .stdout(predicate::str::contains("Report written to "))
+    .stdout(predicate::str::is_match(
+        "(?s)Report written to .*Next stage: run `ai-human fix --apply`",
+    ).unwrap())
     .stdout(predicate::str::contains("-fix-dry-run.md"));
 
     temp.child("service/pay/audit.go")
@@ -663,6 +683,9 @@ fn fix_apply_uses_mock_agent_and_modifies_target_file() {
     .stdout(predicate::str::contains("# Fix Apply Report"))
     .stdout(predicate::str::contains("Source code files modified: yes"))
     .stdout(predicate::str::contains("Report written to "))
+    .stdout(predicate::str::is_match(
+        "(?s)Report written to .*Next stage: run `ai-human learn`",
+    ).unwrap())
     .stdout(predicate::str::contains("-fix-apply.md"));
 
     temp.child("src/lib.rs")

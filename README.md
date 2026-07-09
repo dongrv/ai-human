@@ -120,6 +120,8 @@ Reports use `Next stage:` entries to connect the normal loop:
 plan -> impact -> review -> fix dry-run -> fix --apply -> learn
 ```
 
+Report-producing commands also print the first `Next stage:` line again after `Report written to ...`, so the next task is visible even when the full Markdown scrolls past.
+
 Recoverable command errors include a `Next:` hint. For example, path and review-source errors tell you whether to pass an existing project file, choose either `--path` or `--diff-file`, or adjust `--project-root`.
 
 ## Impact Example
