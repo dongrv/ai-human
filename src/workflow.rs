@@ -100,10 +100,19 @@ pub mod doctor {
         }
 
         pub async fn run(&self) -> Result<String> {
-            let initialized = required_paths_exist(&self.project_root).await?;
+            let checks = project_checks(&self.project_root).await?;
+            let initialized = checks.iter().all(|check| check.present);
+            let ready = initialized && model_ready();
             let mut markdown = String::new();
 
             markdown.push_str("# AI Human Doctor\n\n");
+            markdown.push_str("## Readiness\n\n");
+            if ready {
+                markdown.push_str("- Ready: project and model configuration are usable.\n\n");
+            } else {
+                markdown.push_str("- Not ready: follow the blocking actions below.\n\n");
+            }
+
             markdown.push_str("## Project\n\n");
             markdown.push_str(&format!(
                 "- Project root: {}\n",
@@ -115,12 +124,27 @@ pub mod doctor {
                 markdown.push_str("- Project state: not initialized\n\n");
             }
 
+            markdown.push_str("## Checks\n\n");
+            for check in &checks {
+                if check.present {
+                    markdown.push_str(&format!("- present `{}`\n", check.path));
+                } else {
+                    markdown.push_str(&format!("- missing `{}`\n", check.path));
+                }
+            }
+            if model_ready() {
+                markdown.push_str("- model credentials present\n");
+            } else {
+                markdown.push_str("- model credentials missing\n");
+            }
+            markdown.push('\n');
+
             markdown.push_str("## Model\n\n");
             markdown.push_str(&model_status());
             markdown.push('\n');
 
             markdown.push_str("## Next\n\n");
-            if initialized && model_ready() {
+            if ready {
                 markdown.push_str("- No blocking setup issues detected.\n");
                 markdown.push_str(
                     "- Try `ai-human ask --input \"Which module owns this workflow?\"`.\n",
@@ -136,24 +160,48 @@ pub mod doctor {
                     markdown.push_str("- Set `OPENAI_API_KEY` in your shell or project `.env`.\n");
                 }
             }
+            markdown.push('\n');
+
+            if ready {
+                markdown.push_str("## Suggested Workflow\n\n");
+                markdown.push_str(
+                    "- Start with `ai-human impact --input \"describe the change\" --path path/to/file`.\n",
+                );
+                markdown.push_str(
+                    "- Then run `ai-human review --path path/to/file` before delivery.\n",
+                );
+            }
 
             Ok(markdown)
         }
     }
 
-    async fn required_paths_exist(project_root: &Path) -> Result<bool> {
-        for path in [
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct ProjectCheck {
+        path: &'static str,
+        present: bool,
+    }
+
+    async fn project_checks(project_root: &Path) -> Result<Vec<ProjectCheck>> {
+        let mut checks = Vec::new();
+
+        for path in required_project_paths() {
+            checks.push(ProjectCheck {
+                path,
+                present: fs::try_exists(project_root.join(path)).await?,
+            });
+        }
+
+        Ok(checks)
+    }
+
+    fn required_project_paths() -> [&'static str; 4] {
+        [
             ".ai-human/config.toml",
             ".ai-human/knowledge/README.md",
             ".ai-human/memory/tasks.jsonl",
             ".ai-human/reports",
-        ] {
-            if !fs::try_exists(project_root.join(path)).await? {
-                return Ok(false);
-            }
-        }
-
-        Ok(true)
+        ]
     }
 
     fn model_status() -> String {

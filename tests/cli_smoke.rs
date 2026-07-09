@@ -86,6 +86,13 @@ fn doctor_reports_uninitialized_project_with_next_command() {
         .stdout(predicate::str::contains("# AI Human Doctor"))
         .stdout(predicate::str::contains("Project state"))
         .stdout(predicate::str::contains("not initialized"))
+        .stdout(predicate::str::contains("## Readiness"))
+        .stdout(predicate::str::contains("Not ready"))
+        .stdout(predicate::str::contains("## Checks"))
+        .stdout(predicate::str::contains("missing `.ai-human/config.toml`"))
+        .stdout(predicate::str::contains(
+            "missing `.ai-human/knowledge/README.md`",
+        ))
         .stdout(predicate::str::contains("ai-human init --project-root"));
 }
 
@@ -113,8 +120,15 @@ fn doctor_reports_initialized_project_and_model_env() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Project state: initialized"))
+        .stdout(predicate::str::contains("## Readiness"))
+        .stdout(predicate::str::contains("Ready"))
+        .stdout(predicate::str::contains("## Checks"))
+        .stdout(predicate::str::contains("present `.ai-human/config.toml`"))
         .stdout(predicate::str::contains("OPENAI_API_KEY configured"))
         .stdout(predicate::str::contains("Wire API: responses"))
+        .stdout(predicate::str::contains("## Suggested Workflow"))
+        .stdout(predicate::str::contains("ai-human impact"))
+        .stdout(predicate::str::contains("ai-human review"))
         .stdout(predicate::str::contains(
             "No blocking setup issues detected",
         ));

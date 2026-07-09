@@ -93,7 +93,7 @@ Check whether `.ai-human/` exists and model configuration is visible:
 cargo run -- doctor --project-root .
 ```
 
-The doctor workflow does not call the model. It prints project state, model environment status, selected provider/model/wire API, and the next command to run when setup is incomplete.
+The doctor workflow does not call the model. It prints readiness, project file checks, model environment status, selected provider/model/wire API, and the next command to run when setup is incomplete. When setup is ready, it also suggests a simple `impact -> review` workflow.
 
 ## Plan Example
 
