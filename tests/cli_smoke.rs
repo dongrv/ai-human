@@ -369,6 +369,61 @@ fn impact_accepts_task_id_and_prints_it_in_report() {
 }
 
 #[test]
+fn impact_from_task_uses_latest_plan_input_and_task_id() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child(".ai-human/memory/tasks.jsonl")
+        .write_str(
+            r#"{"task_id":"pay-audit-001","task_type":"Plan","repo":"sample","input":"check library impact","status":"Completed","started_at":"2026-07-09T00:00:00Z","completed_at":"2026-07-09T00:00:01Z","summary":"Mock plan","report_path":".ai-human/reports/pay-audit-001-plan.md"}
+"#,
+        )
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"summary":"Mock inherited impact","files":["src/lib.rs"],"call_chains":[],"protocol_risks":[],"state_risks":[],"persistence_risks":[],"test_entrypoints":["cargo test"]}"#,
+    )
+    .args([
+        "impact",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--from-task",
+        "pay-audit-001",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("Mock inherited impact"))
+    .stdout(predicate::str::contains("- Task ID: pay-audit-001"))
+    .stdout(predicate::str::contains("-impact.md"));
+}
+
+#[test]
+fn impact_from_task_rejects_explicit_task_options() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"summary":"unused","files":[],"call_chains":[],"protocol_risks":[],"state_risks":[],"persistence_risks":[],"test_entrypoints":[]}"#,
+    )
+    .args([
+        "impact",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--from-task",
+        "pay-audit-001",
+        "--input",
+        "explicit input",
+    ])
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains(
+        "use either --from-task or explicit impact options",
+    ))
+    .stderr(predicate::str::contains("Next:"));
+}
+
+#[test]
 fn review_accepts_diff_file_and_prints_report_path() {
     let temp = assert_fs::TempDir::new().unwrap();
     temp.child("change.diff")
@@ -761,6 +816,69 @@ fn fix_accepts_task_id_and_prints_it_in_report() {
     .assert()
     .success()
     .stdout(predicate::str::contains("- Task ID: pay-audit-001"));
+}
+
+#[test]
+fn fix_from_task_uses_latest_review_path_and_task_id() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("src/lib.rs")
+        .write_str("pub fn demo() {}\n")
+        .unwrap();
+    temp.child(".ai-human/memory/tasks.jsonl")
+        .write_str(
+            r#"{"task_id":"pay-audit-001","task_type":"CodeReview","repo":"sample","input":"PATH: src/lib.rs","status":"Completed","started_at":"2026-07-09T00:00:00Z","completed_at":"2026-07-09T00:00:01Z","summary":"Review found a nil guard issue.","report_path":".ai-human/reports/pay-audit-001-review.md"}
+"#,
+        )
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"summary":"Add a nil guard before audit parsing.","target_files":["src/lib.rs"],"change_intent":"Prevent panic on missing payload.","risk_level":"low","risks":[],"verification_commands":["cargo test"],"replacement_files":[{"path":"src/lib.rs","contents":"pub fn demo() {}\n"}],"open_questions":[]}"#,
+    )
+    .args([
+        "fix",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--from-task",
+        "pay-audit-001",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("# Fix Dry Run"))
+    .stdout(predicate::str::contains("- Task ID: pay-audit-001"))
+    .stdout(predicate::str::contains("-fix-dry-run.md"));
+}
+
+#[test]
+fn fix_from_task_rejects_explicit_fix_options() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("src/lib.rs")
+        .write_str("pub fn demo() {}\n")
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"summary":"unused","target_files":[],"change_intent":"unused","risk_level":"low","risks":[],"verification_commands":[],"replacement_files":[],"open_questions":[]}"#,
+    )
+    .args([
+        "fix",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--from-task",
+        "pay-audit-001",
+        "--input",
+        "explicit fix",
+        "--path",
+        "src/lib.rs",
+    ])
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains(
+        "use either --from-task or explicit fix options",
+    ))
+    .stderr(predicate::str::contains("Next:"));
 }
 
 #[test]

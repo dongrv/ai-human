@@ -109,12 +109,19 @@ async fn run(cli: Cli) -> Result<CommandOutcome> {
         Command::Impact(args) => {
             let project_root = args.project_root;
             load_project_env(&project_root)?;
-            let mut input = args.input;
+            let inherited =
+                impact_inheritance(&project_root, &args.from_task, &args.task_id, &args.input)
+                    .await?;
+            let mut input = args.input.or(inherited.input).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "impact requires --input or --from-task. Next: pass --input \"describe the change\" or --from-task task-id."
+                )
+            })?;
             if let Some(path) = args.path {
                 input.push_str(&format!("\nPATH: {}", path.display()));
             }
 
-            let task_id = TaskId::from_user_input(args.task_id);
+            let task_id = TaskId::from_user_input(args.task_id.or(inherited.task_id));
             let started_at = Utc::now();
             let report = ImpactWorkflow::new(project_root.clone(), agent_from_env()?)
                 .run_with_task_id(&input, task_id.clone())
@@ -215,6 +222,14 @@ async fn run(cli: Cli) -> Result<CommandOutcome> {
             let project_root = args.project_root;
             load_project_env(&project_root)?;
             let config = load_project_config(&project_root).await?;
+            let inherited = fix_inheritance(
+                &project_root,
+                &args.from_task,
+                &args.task_id,
+                &args.input,
+                &args.path,
+            )
+            .await?;
             let apply = args.apply;
             let verify_commands = if args.verify.is_empty() {
                 config.fix.default_verify_commands
@@ -223,14 +238,22 @@ async fn run(cli: Cli) -> Result<CommandOutcome> {
             };
             let format_command = args.format.or(config.fix.default_format_command);
             let request = FixRequest {
-                input: args.input,
-                path: args.path,
+                input: args.input.or(inherited.input).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "fix requires --input or --from-task. Next: pass --input \"describe the fix\" and --path file, or --from-task task-id."
+                    )
+                })?,
+                path: args.path.or(inherited.path).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "fix requires --path or --from-task. Next: pass --path file or --from-task task-id."
+                    )
+                })?,
                 verify_commands,
                 format_command,
             };
             let input = format!("{}\nPATH: {}", request.input, request.path.display());
             let workflow = FixWorkflow::new(project_root.clone(), agent_from_env()?);
-            let task_id = TaskId::from_user_input(args.task_id);
+            let task_id = TaskId::from_user_input(args.task_id.or(inherited.task_id));
             let started_at = Utc::now();
             let report = if apply {
                 workflow
@@ -315,9 +338,11 @@ impl MetricContext {
             Command::Plan(args) => {
                 Self::new("plan", args.project_root.clone(), args.task_id.clone())
             }
-            Command::Impact(args) => {
-                Self::new("impact", args.project_root.clone(), args.task_id.clone())
-            }
+            Command::Impact(args) => Self::new(
+                "impact",
+                args.project_root.clone(),
+                args.task_id.clone().or_else(|| args.from_task.clone()),
+            ),
             Command::Review(args) => Self::new(
                 "review",
                 args.project_root.clone(),
@@ -328,7 +353,11 @@ impl MetricContext {
                 args.project_root.clone(),
                 args.task_id.clone().or_else(|| args.from_task.clone()),
             ),
-            Command::Fix(args) => Self::new("fix", args.project_root.clone(), args.task_id.clone()),
+            Command::Fix(args) => Self::new(
+                "fix",
+                args.project_root.clone(),
+                args.task_id.clone().or_else(|| args.from_task.clone()),
+            ),
             Command::Task(args) => {
                 Self::new("task", args.project_root.clone(), Some(args.id.clone()))
             }
@@ -391,6 +420,41 @@ fn task_result_summary(timeline: &TaskTimeline) -> ResultSummary {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct ImpactInheritance {
+    task_id: Option<String>,
+    input: Option<String>,
+}
+
+async fn impact_inheritance(
+    project_root: &Path,
+    from_task: &Option<String>,
+    task_id: &Option<String>,
+    input: &Option<String>,
+) -> Result<ImpactInheritance> {
+    let Some(from_task_id) = from_task else {
+        return Ok(ImpactInheritance::default());
+    };
+    if task_id.is_some() || input.is_some() {
+        bail!(
+            "use either --from-task or explicit impact options, not both. Next: remove --task-id/--input or remove --from-task."
+        );
+    }
+
+    let timeline = TaskIndex::new(project_root).load(from_task_id).await?;
+    match continuation_from_timeline(&timeline) {
+        Some(Continuation::ImpactInput { task_id, input }) => Ok(ImpactInheritance {
+            task_id: Some(task_id),
+            input: Some(input),
+        }),
+        _ => bail!(
+            "task `{}` does not have an inheritable impact input. Next: run `ai-human task --id {}` and follow its Suggested command, or pass --input explicitly.",
+            from_task_id,
+            from_task_id
+        ),
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct ReviewInheritance {
     task_id: Option<String>,
     path: Option<PathBuf>,
@@ -421,6 +485,48 @@ async fn review_inheritance(
             "task `{}` does not have an inheritable review source. Next: run `ai-human task --id {}` and follow its Suggested command, or pass --path explicitly.",
             task_id,
             task_id
+        ),
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct FixInheritance {
+    task_id: Option<String>,
+    input: Option<String>,
+    path: Option<PathBuf>,
+}
+
+async fn fix_inheritance(
+    project_root: &Path,
+    from_task: &Option<String>,
+    task_id: &Option<String>,
+    input: &Option<String>,
+    path: &Option<PathBuf>,
+) -> Result<FixInheritance> {
+    let Some(from_task_id) = from_task else {
+        return Ok(FixInheritance::default());
+    };
+    if task_id.is_some() || input.is_some() || path.is_some() {
+        bail!(
+            "use either --from-task or explicit fix options, not both. Next: remove --task-id/--input/--path or remove --from-task."
+        );
+    }
+
+    let timeline = TaskIndex::new(project_root).load(from_task_id).await?;
+    match continuation_from_timeline(&timeline) {
+        Some(Continuation::FixPath {
+            task_id,
+            input,
+            path,
+        }) => Ok(FixInheritance {
+            task_id: Some(task_id),
+            input: Some(input),
+            path: Some(PathBuf::from(path)),
+        }),
+        _ => bail!(
+            "task `{}` does not have an inheritable fix path. Next: run `ai-human task --id {}` and follow its Suggested command, or pass --input and --path explicitly.",
+            from_task_id,
+            from_task_id
         ),
     }
 }

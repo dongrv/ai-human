@@ -149,6 +149,49 @@ fn continuation_from_impact_task_returns_review_path() {
 }
 
 #[test]
+fn continuation_from_plan_task_returns_impact_input() {
+    let timeline = ai_human::task_index::TaskTimeline {
+        task_id: "pay-audit-001".into(),
+        records: vec![task_record(
+            TaskType::Plan,
+            "analyze payment audit requirement",
+            "Design payment audit.",
+            ".ai-human/reports/pay-audit-001-plan.md",
+        )],
+    };
+
+    assert_eq!(
+        continuation_from_timeline(&timeline),
+        Some(Continuation::ImpactInput {
+            task_id: "pay-audit-001".into(),
+            input: "analyze payment audit requirement".into(),
+        })
+    );
+}
+
+#[test]
+fn continuation_from_review_task_returns_fix_path_and_input() {
+    let timeline = ai_human::task_index::TaskTimeline {
+        task_id: "pay-audit-001".into(),
+        records: vec![task_record(
+            TaskType::CodeReview,
+            "PATH: src/lib.rs",
+            "Review found a nil guard issue.",
+            ".ai-human/reports/pay-audit-001-review.md",
+        )],
+    };
+
+    assert_eq!(
+        continuation_from_timeline(&timeline),
+        Some(Continuation::FixPath {
+            task_id: "pay-audit-001".into(),
+            input: "Review found a nil guard issue.".into(),
+            path: "src/lib.rs".into(),
+        })
+    );
+}
+
+#[test]
 fn continuation_from_fix_task_returns_learn_source_report() {
     let timeline = ai_human::task_index::TaskTimeline {
         task_id: "pay-audit-001".into(),

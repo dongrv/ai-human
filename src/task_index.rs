@@ -26,8 +26,17 @@ pub struct TaskTimeline {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Continuation {
+    ImpactInput {
+        task_id: String,
+        input: String,
+    },
     ReviewPath {
         task_id: String,
+        path: String,
+    },
+    FixPath {
+        task_id: String,
+        input: String,
         path: String,
     },
     LearnSourceReport {
@@ -150,8 +159,17 @@ pub fn continuation_from_timeline(timeline: &TaskTimeline) -> Option<Continuatio
     let latest = timeline.records.last()?;
 
     match latest.task_type {
+        TaskType::Plan => Some(Continuation::ImpactInput {
+            task_id: timeline.task_id.clone(),
+            input: latest.input.clone(),
+        }),
         TaskType::ImpactAnalysis => path_hint(&latest.input).map(|path| Continuation::ReviewPath {
             task_id: timeline.task_id.clone(),
+            path,
+        }),
+        TaskType::CodeReview => path_hint(&latest.input).map(|path| Continuation::FixPath {
+            task_id: timeline.task_id.clone(),
+            input: latest.summary.clone(),
             path,
         }),
         TaskType::SmallFix => {

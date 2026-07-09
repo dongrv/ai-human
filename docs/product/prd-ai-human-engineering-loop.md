@@ -588,17 +588,17 @@ v1 默认对 High 风险阻断 apply。
 - `fix` 默认 dry-run，`fix --apply` 遇到 High 风险默认阻断。
 - 报告型命令已写入 `.ai-human/memory/tasks.jsonl`，`task --id` 可查看同一任务的报告链路，并输出可复制的 `Suggested command:`。
 - 命令已写入 `.ai-human/memory/metrics.jsonl`，记录本地成功率、失败摘要、耗时和报告产出。
-- `review --from-task` 和 `learn --from-task` 已支持从任务上下文继承 task id、路径或 source report。
+- `impact --from-task`、`review --from-task`、`fix --from-task`、`learn --from-task` 已支持从任务上下文继承 task id、input、path 或 source report。
 
 部分完成：
 
 - 高频可恢复错误已输出 `Next:` 建议，仍需覆盖所有模型/provider 配置错误。
-- 写操作已记录报告路径和验证结果，任务索引已有最小可查询能力，仍需扩展 `fix --from-task` 和 `impact --from-task`。
+- 写操作已记录报告路径和验证结果，任务索引已有最小可查询能力，仍需扩展失败恢复和 Evidence/Rule Hit 结构化。
 
 待推进：
 
-- 支持 `fix --from-task` 和 `impact --from-task`，继续压缩高频链路参数。
-- 继续压缩高频命令输入参数，让用户更少记忆命令细节。
+- 覆盖所有模型/provider 配置错误的 `Next:` 恢复提示。
+- 增强 Evidence/Rule Hit 结构化，让报告更明确地区分代码、规则、历史报告和模型推断。
 
 ## 16. 下一步建议
 

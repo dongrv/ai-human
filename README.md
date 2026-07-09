@@ -125,11 +125,13 @@ The task command reads `.ai-human/memory/tasks.jsonl`, prints the reports record
 Some commands can inherit task context directly:
 
 ```powershell
+cargo run -- impact --from-task pay-audit-001
 cargo run -- review --from-task pay-audit-001
+cargo run -- fix --from-task pay-audit-001
 cargo run -- learn --from-task pay-audit-001 --input "Capture the reusable lesson from this task."
 ```
 
-`review --from-task` uses the latest impact record for that task and inherits its path. `learn --from-task` uses the latest fix report as `--source-report`. Explicit source options such as `--path`, `--diff-file`, `--task-id`, or `--source-report` are rejected when they conflict with `--from-task`.
+`impact --from-task` uses the latest plan input. `review --from-task` uses the latest impact path. `fix --from-task` uses the latest review path and summary. `learn --from-task` uses the latest fix report as `--source-report`. Explicit source options such as `--input`, `--path`, `--diff-file`, `--task-id`, or `--source-report` are rejected when they conflict with `--from-task`.
 
 Reports use `Next stage:` entries to connect the normal loop:
 

@@ -71,10 +71,13 @@ pub struct ImpactArgs {
     pub project_root: PathBuf,
 
     #[arg(long)]
-    pub input: String,
+    pub input: Option<String>,
 
     #[arg(long, help = "Optional task id used to connect related reports")]
     pub task_id: Option<String>,
+
+    #[arg(long, help = "Inherit impact input and task id from a previous task")]
+    pub from_task: Option<String>,
 
     #[arg(long)]
     pub path: Option<PathBuf>,
@@ -146,13 +149,19 @@ pub struct FixArgs {
     pub project_root: PathBuf,
 
     #[arg(long, help = "Problem statement or desired small local fix")]
-    pub input: String,
+    pub input: Option<String>,
 
     #[arg(long, help = "Optional task id used to connect related reports")]
     pub task_id: Option<String>,
 
+    #[arg(
+        long,
+        help = "Inherit fix input, path, and task id from a previous task"
+    )]
+    pub from_task: Option<String>,
+
     #[arg(long, help = "Single target file to analyze or update")]
-    pub path: PathBuf,
+    pub path: Option<PathBuf>,
 
     #[arg(long, help = "Preview the fix plan without modifying source files")]
     pub dry_run: bool,
