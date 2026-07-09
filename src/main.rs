@@ -5,6 +5,9 @@ use ai_human::agent::mock::MockAgentClient;
 use ai_human::agent::rig_client::{OpenAiWireApi, RigAgentClient};
 use ai_human::agent::AgentClient;
 use ai_human::cli::{Cli, Command};
+use ai_human::cli_output::{
+    doctor_result_summary, print_result_summary, print_workflow_report, ResultSummary,
+};
 use ai_human::config::load_project_config;
 use ai_human::core::task::TaskId;
 use ai_human::env::load_project_env;
@@ -16,7 +19,6 @@ use ai_human::workflow::init::InitWorkflow;
 use ai_human::workflow::learn::{LearnRequest, LearnWorkflow};
 use ai_human::workflow::plan::PlanWorkflow;
 use ai_human::workflow::review::ReviewWorkflow;
-use ai_human::workflow::WorkflowReport;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -141,98 +143,6 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-fn print_workflow_report(report: &WorkflowReport) {
-    println!("{}", report.markdown);
-    println!("Report written to {}", report.path);
-    print_result_summary(ResultSummary {
-        summary: report_summary(&report.markdown),
-        report: report.path.clone(),
-        next_stage: first_next_stage(&report.markdown)
-            .unwrap_or_else(|| "Review the report.".into()),
-    });
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ResultSummary {
-    summary: String,
-    report: String,
-    next_stage: String,
-}
-
-fn print_result_summary(summary: ResultSummary) {
-    println!("## Result Summary");
-    println!("- Summary: {}", summary.summary);
-    println!("- Report: {}", summary.report);
-    println!("- Next stage: {}", summary.next_stage);
-}
-
-fn doctor_result_summary(report: &str) -> ResultSummary {
-    if report.contains("Project state: initialized") && report.contains("model credentials present")
-    {
-        ResultSummary {
-            summary: "Setup is ready.".into(),
-            report: "none".into(),
-            next_stage: "run `ai-human ask`, `ai-human plan`, or `ai-human impact`".into(),
-        }
-    } else {
-        ResultSummary {
-            summary: "Setup is not ready.".into(),
-            report: "none".into(),
-            next_stage: first_doctor_next_command(report)
-                .unwrap_or_else(|| "fix the blocking setup issue listed above".into()),
-        }
-    }
-}
-
-fn first_doctor_next_command(report: &str) -> Option<String> {
-    report.lines().find_map(|line| {
-        line.trim()
-            .strip_prefix("- Run `")
-            .and_then(|value| value.strip_suffix("`."))
-            .map(|command| format!("run `{command}`"))
-    })
-}
-
-fn first_next_stage(markdown: &str) -> Option<String> {
-    markdown.lines().find_map(|line| {
-        line.trim()
-            .strip_prefix("- Next stage: ")
-            .map(|action| action.to_string())
-    })
-}
-
-fn report_summary(markdown: &str) -> String {
-    markdown_section_first_text(markdown, "## Summary")
-        .or_else(|| markdown_title(markdown))
-        .unwrap_or_else(|| "Report generated.".into())
-}
-
-fn markdown_section_first_text(markdown: &str, heading: &str) -> Option<String> {
-    let mut in_section = false;
-
-    for line in markdown.lines() {
-        let trimmed = line.trim();
-        if trimmed == heading {
-            in_section = true;
-            continue;
-        }
-        if in_section && trimmed.starts_with("## ") {
-            return None;
-        }
-        if in_section && !trimmed.is_empty() {
-            return Some(trimmed.trim_start_matches("- ").into());
-        }
-    }
-
-    None
-}
-
-fn markdown_title(markdown: &str) -> Option<String> {
-    markdown
-        .lines()
-        .find_map(|line| line.trim().strip_prefix("# ").map(str::to_string))
 }
 
 fn agent_from_env() -> Result<Box<dyn AgentClient>> {
