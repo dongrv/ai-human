@@ -66,6 +66,7 @@ pub mod markdown {
         push_list(&mut md, "Evidence", &meta.evidence);
         push_list(&mut md, "Files", &output.files);
         push_list(&mut md, "Call Chains", &output.call_chains);
+        push_risk_level(&mut md, impact_risk_level(output));
         push_list(&mut md, "Risks", &impact_risks(output));
         push_list(&mut md, "Protocol Risks", &output.protocol_risks);
         push_list(&mut md, "State Risks", &output.state_risks);
@@ -113,6 +114,7 @@ pub mod markdown {
         push_task(&mut md, meta);
         push_list(&mut md, "Evidence", &meta.evidence);
         push_findings(&mut md, output);
+        push_risk_level(&mut md, review_risk_level(output));
         push_list(&mut md, "Test Gaps", &output.test_gaps);
         push_list(&mut md, "Risks", &output.residual_risks);
         push_list(&mut md, "Residual Risks", &output.residual_risks);
@@ -295,6 +297,41 @@ pub mod markdown {
             .chain(output.persistence_risks.iter())
             .cloned()
             .collect()
+    }
+
+    fn impact_risk_level(output: &ImpactOutput) -> &'static str {
+        if !output.protocol_risks.is_empty() {
+            "High"
+        } else if !output.state_risks.is_empty() || !output.persistence_risks.is_empty() {
+            "Medium"
+        } else {
+            "Low"
+        }
+    }
+
+    fn review_risk_level(output: &ReviewOutput) -> &'static str {
+        if output
+            .findings
+            .iter()
+            .any(|finding| matches!(finding.severity.to_ascii_uppercase().as_str(), "P0" | "P1"))
+        {
+            "High"
+        } else if output
+            .findings
+            .iter()
+            .any(|finding| matches!(finding.severity.to_ascii_uppercase().as_str(), "P2"))
+            || !output.test_gaps.is_empty()
+            || !output.residual_risks.is_empty()
+        {
+            "Medium"
+        } else {
+            "Low"
+        }
+    }
+
+    fn push_risk_level(md: &mut String, level: &str) {
+        md.push_str("## Risk Level\n\n");
+        md.push_str(&format!("{level}\n\n"));
     }
 
     fn push_verification_results(md: &mut String, output: &FixApplyOutput) {

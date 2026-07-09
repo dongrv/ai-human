@@ -197,6 +197,31 @@ async fn impact_report_includes_task_id_and_unified_sections() {
 }
 
 #[tokio::test]
+async fn impact_report_infers_high_risk_level_from_protocol_risks() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "summary":"Payment audit changes response compatibility",
+        "files":["service/pay/audit.go"],
+        "call_chains":["controller -> service/pay -> dao"],
+        "protocol_risks":["Response contract changes for payment audit"],
+        "state_risks":[],
+        "persistence_risks":[],
+        "test_entrypoints":["go test ./service/pay"]
+    }"#
+    .into()]);
+
+    let report = ImpactWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run("service/pay/audit.go")
+        .await
+        .unwrap();
+
+    assert!(report.markdown.contains("## Risk Level\n\nHigh\n\n"));
+    assert!(report
+        .markdown
+        .contains("Confirm protocol compatibility and owner before implementation."));
+}
+
+#[tokio::test]
 async fn review_workflow_writes_markdown_report_from_diff_file() {
     let temp = assert_fs::TempDir::new().unwrap();
     temp.child("change.diff")
@@ -225,6 +250,34 @@ async fn review_workflow_writes_markdown_report_from_diff_file() {
     assert!(report.markdown.contains("Audit state is not persisted"));
     assert!(report.path.ends_with("-review.md"));
     temp.child(&report.path).assert(report.markdown.as_str());
+}
+
+#[tokio::test]
+async fn review_report_infers_high_risk_level_from_p1_findings() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "summary":"One blocking risk found",
+        "findings":[{
+            "severity":"P1",
+            "file":"service/pay/audit.go",
+            "line":42,
+            "issue":"Audit state is not persisted after mutation",
+            "suggestion":"Persist audit state before returning success"
+        }],
+        "test_gaps":["No regression test for failed persistence"],
+        "residual_risks":[]
+    }"#
+    .into()]);
+
+    let report = ReviewWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run_text("diff --git a/service/pay/audit.go b/service/pay/audit.go")
+        .await
+        .unwrap();
+
+    assert!(report.markdown.contains("## Risk Level\n\nHigh\n\n"));
+    assert!(report
+        .markdown
+        .contains("Address P0/P1 findings before merge."));
 }
 
 #[tokio::test]

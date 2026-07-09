@@ -315,10 +315,7 @@ pub mod impact {
                     "Source: project context loaded from repository knowledge and path hints."
                         .into(),
                 ],
-                next_actions: vec![
-                    "Use these files and risks as review focus areas.".into(),
-                    "Run the listed test entrypoints after implementation.".into(),
-                ],
+                next_actions: impact_next_actions(&output),
             };
             let markdown = render_impact_report(&output, &meta);
             let path = report_path(&self.project_root, "impact");
@@ -343,6 +340,27 @@ Return only JSON matching this schema:
   "test_entrypoints": ["specific test or verification commands"]
 }
 "#;
+
+    fn impact_next_actions(output: &ImpactOutput) -> Vec<String> {
+        if !output.protocol_risks.is_empty() {
+            vec![
+                "Confirm protocol compatibility and owner before implementation.".into(),
+                "Use these files and risks as review focus areas.".into(),
+                "Run the listed test entrypoints after implementation.".into(),
+            ]
+        } else if !output.state_risks.is_empty() || !output.persistence_risks.is_empty() {
+            vec![
+                "Review state and persistence risks before applying code changes.".into(),
+                "Use these files and risks as review focus areas.".into(),
+                "Run the listed test entrypoints after implementation.".into(),
+            ]
+        } else {
+            vec![
+                "Use these files as implementation focus areas.".into(),
+                "Run the listed test entrypoints after implementation.".into(),
+            ]
+        }
+    }
 }
 
 pub mod fix {
@@ -811,10 +829,7 @@ pub mod review {
             let meta = ReportMeta {
                 task_id: task_id.clone(),
                 evidence: vec!["Source: review input and project context.".into()],
-                next_actions: vec![
-                    "Fix P0/P1 findings before delivery.".into(),
-                    "Run verification for listed test gaps.".into(),
-                ],
+                next_actions: review_next_actions(&output),
             };
             let markdown = render_review_report(&output, &meta);
             let path = report_path(&self.project_root, "review");
@@ -844,6 +859,29 @@ Return only JSON matching this schema:
   "residual_risks": ["risks that remain after review"]
 }
 "#;
+
+    fn review_next_actions(output: &ReviewOutput) -> Vec<String> {
+        if output
+            .findings
+            .iter()
+            .any(|finding| matches!(finding.severity.to_ascii_uppercase().as_str(), "P0" | "P1"))
+        {
+            vec![
+                "Address P0/P1 findings before merge.".into(),
+                "Run verification for listed test gaps.".into(),
+            ]
+        } else if !output.findings.is_empty()
+            || !output.test_gaps.is_empty()
+            || !output.residual_risks.is_empty()
+        {
+            vec![
+                "Address listed findings or residual risks before delivery.".into(),
+                "Run verification for listed test gaps.".into(),
+            ]
+        } else {
+            vec!["No blocking findings; keep standard verification before delivery.".into()]
+        }
+    }
 
     async fn read_project_file(
         project_root: &Path,
