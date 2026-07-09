@@ -98,6 +98,9 @@ async fn plan_workflow_report_includes_task_id_and_unified_sections() {
     assert!(report.markdown.contains("## Evidence"));
     assert!(report.markdown.contains("## Risks"));
     assert!(report.markdown.contains("## Next"));
+    assert!(report
+        .markdown
+        .contains("Next stage: run `ai-human impact`"));
     temp.child(&report.path).assert(report.markdown.as_str());
 }
 
@@ -194,6 +197,9 @@ async fn impact_report_includes_task_id_and_unified_sections() {
     assert!(report.markdown.contains("## Evidence"));
     assert!(report.markdown.contains("## Risks"));
     assert!(report.markdown.contains("## Next"));
+    assert!(report
+        .markdown
+        .contains("Next stage: run `ai-human review`"));
 }
 
 #[tokio::test]
@@ -384,6 +390,7 @@ async fn review_report_includes_task_id_and_unified_sections() {
     assert!(report.markdown.contains("## Evidence"));
     assert!(report.markdown.contains("## Risks"));
     assert!(report.markdown.contains("## Next"));
+    assert!(report.markdown.contains("Next stage: run `ai-human fix`"));
 }
 
 #[tokio::test]
@@ -470,6 +477,9 @@ async fn learn_report_includes_task_id_and_unified_sections() {
     assert!(report.markdown.contains("## Evidence"));
     assert!(report.markdown.contains("## Risks"));
     assert!(report.markdown.contains("## Next"));
+    assert!(report
+        .markdown
+        .contains("Next stage: run `ai-human ask`, `ai-human plan`, or `ai-human review`"));
 }
 
 #[tokio::test]
@@ -622,6 +632,9 @@ async fn fix_dry_run_report_includes_task_id_and_unified_sections() {
     assert!(report.markdown.contains("## Evidence"));
     assert!(report.markdown.contains("## Risks"));
     assert!(report.markdown.contains("## Next"));
+    assert!(report
+        .markdown
+        .contains("Next stage: run `ai-human fix --apply`"));
 }
 
 #[tokio::test]
@@ -776,6 +789,7 @@ async fn fix_apply_report_includes_task_id_and_unified_sections() {
     assert!(report.markdown.contains("## Evidence"));
     assert!(report.markdown.contains("## Risks"));
     assert!(report.markdown.contains("## Next"));
+    assert!(report.markdown.contains("Next stage: run `ai-human learn`"));
 }
 
 #[tokio::test]

@@ -15,6 +15,7 @@ AI Human is a Rust rig-powered CLI digital human for service-side engineering wo
 - Preview and apply one-file local fixes with explicit `--apply`.
 - Render plan, impact, review, learning, and fix outputs as Markdown reports under `.ai-human/reports/`.
 - Connect related plan, impact, review, learn, and fix reports with `--task-id`.
+- Each completed report includes a `Next stage:` action so users can continue the engineering loop without memorizing the workflow.
 
 ## Quick Start
 
@@ -112,6 +113,12 @@ cargo run -- review --task-id pay-audit-001 --path service/pay/audit.go
 ```
 
 If `--task-id` is omitted, AI Human generates one automatically and prints it in the report's `## Task` section.
+
+Reports use `Next stage:` entries to connect the normal loop:
+
+```text
+plan -> impact -> review -> fix dry-run -> fix --apply -> learn
+```
 
 ## Impact Example
 

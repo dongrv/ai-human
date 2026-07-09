@@ -284,6 +284,8 @@ pub mod plan {
                         .into(),
                 ],
                 next_actions: vec![
+                    "Next stage: run `ai-human impact` for the planned change before editing code."
+                        .into(),
                     "Run `ai-human impact` for the planned change before editing code.".into(),
                     "Review open questions before using `fix --apply`.".into(),
                 ],
@@ -392,18 +394,24 @@ Return only JSON matching this schema:
     fn impact_next_actions(output: &ImpactOutput) -> Vec<String> {
         if !output.protocol_risks.is_empty() {
             vec![
+                "Next stage: run `ai-human review` after implementation or after preparing a diff."
+                    .into(),
                 "Confirm protocol compatibility and owner before implementation.".into(),
                 "Use these files and risks as review focus areas.".into(),
                 "Run the listed test entrypoints after implementation.".into(),
             ]
         } else if !output.state_risks.is_empty() || !output.persistence_risks.is_empty() {
             vec![
+                "Next stage: run `ai-human review` after implementation or after preparing a diff."
+                    .into(),
                 "Review state and persistence risks before applying code changes.".into(),
                 "Use these files and risks as review focus areas.".into(),
                 "Run the listed test entrypoints after implementation.".into(),
             ]
         } else {
             vec![
+                "Next stage: run `ai-human review` after implementation or after preparing a diff."
+                    .into(),
                 "Use these files as implementation focus areas.".into(),
                 "Run the listed test entrypoints after implementation.".into(),
             ]
@@ -463,6 +471,8 @@ pub mod fix {
                     request.path.to_string_lossy().replace('\\', "/")
                 )],
                 next_actions: vec![
+                    "Next stage: run `ai-human fix --apply` only after the dry-run is reviewed."
+                        .into(),
                     "Review the proposed replacement before applying it.".into(),
                     "Run `ai-human fix --apply` only after risk and verification are acceptable."
                         .into(),
@@ -506,6 +516,8 @@ pub mod fix {
                     request.path.to_string_lossy().replace('\\', "/")
                 )],
                 next_actions: vec![
+                    "Next stage: run `ai-human learn` if this fix produced a reusable team rule."
+                        .into(),
                     "Review the written file diff before delivery.".into(),
                     "Address any failed verification result before treating this change as complete.".into(),
                 ],
@@ -713,6 +725,7 @@ pub mod learn {
                 task_id,
                 evidence: output.evidence.clone(),
                 next_actions: vec![
+                    "Next stage: run `ai-human ask`, `ai-human plan`, or `ai-human review` to reuse this knowledge.".into(),
                     "Review the Markdown entry before treating it as a team rule.".into(),
                     "Re-run related `ask`, `plan`, `impact`, or `review` commands to reuse this knowledge.".into(),
                 ],
@@ -915,6 +928,7 @@ Return only JSON matching this schema:
             .any(|finding| matches!(finding.severity.to_ascii_uppercase().as_str(), "P0" | "P1"))
         {
             vec![
+                "Next stage: run `ai-human fix` as a dry-run for safe, local P0/P1 fixes.".into(),
                 "Address P0/P1 findings before merge.".into(),
                 "Run verification for listed test gaps.".into(),
             ]
@@ -923,11 +937,16 @@ Return only JSON matching this schema:
             || !output.residual_risks.is_empty()
         {
             vec![
+                "Next stage: run `ai-human fix` as a dry-run when a local code change is needed."
+                    .into(),
                 "Address listed findings or residual risks before delivery.".into(),
                 "Run verification for listed test gaps.".into(),
             ]
         } else {
-            vec!["No blocking findings; keep standard verification before delivery.".into()]
+            vec![
+                "Next stage: run `ai-human learn` if this review captured a reusable rule.".into(),
+                "No blocking findings; keep standard verification before delivery.".into(),
+            ]
         }
     }
 
