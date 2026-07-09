@@ -5,6 +5,7 @@ use ai_human::agent::mock::MockAgentClient;
 use ai_human::agent::rig_client::{OpenAiWireApi, RigAgentClient};
 use ai_human::agent::AgentClient;
 use ai_human::cli::{Cli, Command};
+use ai_human::core::task::TaskId;
 use ai_human::env::load_project_env;
 use ai_human::workflow::ask::AskWorkflow;
 use ai_human::workflow::doctor::DoctorWorkflow;
@@ -44,7 +45,7 @@ async fn main() -> Result<()> {
         Command::Plan(args) => {
             load_project_env(&args.project_root)?;
             let report = PlanWorkflow::new(args.project_root, agent_from_env()?)
-                .run(&args.input)
+                .run_with_task_id(&args.input, TaskId::from_user_input(args.task_id))
                 .await?;
             println!("{}", report.markdown);
             println!("Report written to {}", report.path);
@@ -57,7 +58,7 @@ async fn main() -> Result<()> {
             }
 
             let report = ImpactWorkflow::new(args.project_root, agent_from_env()?)
-                .run(&input)
+                .run_with_task_id(&input, TaskId::from_user_input(args.task_id))
                 .await?;
             println!("{}", report.markdown);
             println!("Report written to {}", report.path);
@@ -65,9 +66,14 @@ async fn main() -> Result<()> {
         Command::Review(args) => {
             load_project_env(&args.project_root)?;
             let workflow = ReviewWorkflow::new(args.project_root, agent_from_env()?);
+            let task_id = TaskId::from_user_input(args.task_id);
             let report = match (args.diff_file, args.path) {
-                (Some(diff_file), None) => workflow.run_diff_file(diff_file).await?,
-                (None, Some(path)) => workflow.run_path(path).await?,
+                (Some(diff_file), None) => {
+                    workflow
+                        .run_diff_file_with_task_id(diff_file, task_id)
+                        .await?
+                }
+                (None, Some(path)) => workflow.run_path_with_task_id(path, task_id).await?,
                 (Some(_), Some(_)) => bail!("use either --diff-file or --path, not both"),
                 (None, None) => bail!("review requires --diff-file or --path"),
             };
@@ -77,12 +83,15 @@ async fn main() -> Result<()> {
         Command::Learn(args) => {
             load_project_env(&args.project_root)?;
             let report = LearnWorkflow::new(args.project_root, agent_from_env()?)
-                .run(LearnRequest {
-                    input: args.input,
-                    category: args.category,
-                    target: args.target,
-                    source_report: args.source_report,
-                })
+                .run_with_task_id(
+                    LearnRequest {
+                        input: args.input,
+                        category: args.category,
+                        target: args.target,
+                        source_report: args.source_report,
+                    },
+                    TaskId::from_user_input(args.task_id),
+                )
                 .await?;
             println!("{}", report.markdown);
             println!("Report written to {}", report.path);
@@ -97,10 +106,11 @@ async fn main() -> Result<()> {
                 format_command: args.format,
             };
             let workflow = FixWorkflow::new(args.project_root, agent_from_env()?);
+            let task_id = TaskId::from_user_input(args.task_id);
             let report = if apply {
-                workflow.run_apply(request).await?
+                workflow.run_apply_with_task_id(request, task_id).await?
             } else {
-                workflow.run_dry_run(request).await?
+                workflow.run_dry_run_with_task_id(request, task_id).await?
             };
             println!("{}", report.markdown);
             println!("Report written to {}", report.path);

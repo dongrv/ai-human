@@ -193,7 +193,8 @@ pub mod plan {
     use crate::agent::{AgentClient, AgentRequest};
     use crate::context::loader::ContextLoader;
     use crate::core::report::PlanOutput;
-    use crate::report::markdown::render_plan;
+    use crate::core::task::TaskId;
+    use crate::report::markdown::{render_plan_report, ReportMeta};
     use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
 
     pub struct PlanWorkflow {
@@ -210,6 +211,14 @@ pub mod plan {
         }
 
         pub async fn run(&self, input: &str) -> Result<WorkflowReport> {
+            self.run_with_task_id(input, TaskId::new()).await
+        }
+
+        pub async fn run_with_task_id(
+            &self,
+            input: &str,
+            task_id: TaskId,
+        ) -> Result<WorkflowReport> {
             let context = ContextLoader::new(self.project_root.clone())
                 .load_for_input(input)
                 .await?;
@@ -220,7 +229,18 @@ pub mod plan {
                     user_prompt: format!("INPUT:\n{input}\n\nCONTEXT:\n{}", context.combined_text),
                 })
                 .await?;
-            let markdown = render_plan(&output);
+            let meta = ReportMeta {
+                task_id,
+                evidence: vec![
+                    "Source: project context loaded from repository knowledge and path hints."
+                        .into(),
+                ],
+                next_actions: vec![
+                    "Run `ai-human impact` for the planned change before editing code.".into(),
+                    "Review open questions before using `fix --apply`.".into(),
+                ],
+            };
+            let markdown = render_plan_report(&output, &meta);
             let path = report_path(&self.project_root, "plan");
             write_report(&path, &markdown).await?;
 
@@ -253,7 +273,8 @@ pub mod impact {
     use crate::agent::{AgentClient, AgentRequest};
     use crate::context::loader::ContextLoader;
     use crate::core::report::ImpactOutput;
-    use crate::report::markdown::render_impact;
+    use crate::core::task::TaskId;
+    use crate::report::markdown::{render_impact_report, ReportMeta};
     use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
 
     pub struct ImpactWorkflow {
@@ -270,6 +291,14 @@ pub mod impact {
         }
 
         pub async fn run(&self, input: &str) -> Result<WorkflowReport> {
+            self.run_with_task_id(input, TaskId::new()).await
+        }
+
+        pub async fn run_with_task_id(
+            &self,
+            input: &str,
+            task_id: TaskId,
+        ) -> Result<WorkflowReport> {
             let context = ContextLoader::new(self.project_root.clone())
                 .load_for_input(input)
                 .await?;
@@ -280,7 +309,18 @@ pub mod impact {
                     user_prompt: format!("INPUT:\n{input}\n\nCONTEXT:\n{}", context.combined_text),
                 })
                 .await?;
-            let markdown = render_impact(&output);
+            let meta = ReportMeta {
+                task_id,
+                evidence: vec![
+                    "Source: project context loaded from repository knowledge and path hints."
+                        .into(),
+                ],
+                next_actions: vec![
+                    "Use these files and risks as review focus areas.".into(),
+                    "Run the listed test entrypoints after implementation.".into(),
+                ],
+            };
+            let markdown = render_impact_report(&output, &meta);
             let path = report_path(&self.project_root, "impact");
             write_report(&path, &markdown).await?;
 
@@ -313,7 +353,8 @@ pub mod fix {
     use crate::agent::{AgentClient, AgentRequest};
     use crate::context::loader::ContextLoader;
     use crate::core::report::{FixApplyOutput, FixPlanOutput, VerificationResult};
-    use crate::report::markdown::{render_fix_apply, render_fix_plan};
+    use crate::core::task::TaskId;
+    use crate::report::markdown::{render_fix_apply_report, render_fix_plan_report, ReportMeta};
     use crate::tools::command::{CommandResult, CommandRunner};
     use crate::tools::fs::ProjectFs;
     use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
@@ -340,8 +381,28 @@ pub mod fix {
         }
 
         pub async fn run_dry_run(&self, request: FixRequest) -> Result<WorkflowReport> {
+            self.run_dry_run_with_task_id(request, TaskId::new()).await
+        }
+
+        pub async fn run_dry_run_with_task_id(
+            &self,
+            request: FixRequest,
+            task_id: TaskId,
+        ) -> Result<WorkflowReport> {
             let output = self.build_plan(&request).await?;
-            let markdown = render_fix_plan(&output);
+            let meta = ReportMeta {
+                task_id,
+                evidence: vec![format!(
+                    "Source: target file `{}` and project context.",
+                    request.path.to_string_lossy().replace('\\', "/")
+                )],
+                next_actions: vec![
+                    "Review the proposed replacement before applying it.".into(),
+                    "Run `ai-human fix --apply` only after risk and verification are acceptable."
+                        .into(),
+                ],
+            };
+            let markdown = render_fix_plan_report(&output, &meta);
             let path = report_path(&self.project_root, "fix-dry-run");
             write_report(&path, &markdown).await?;
 
@@ -352,6 +413,14 @@ pub mod fix {
         }
 
         pub async fn run_apply(&self, request: FixRequest) -> Result<WorkflowReport> {
+            self.run_apply_with_task_id(request, TaskId::new()).await
+        }
+
+        pub async fn run_apply_with_task_id(
+            &self,
+            request: FixRequest,
+            task_id: TaskId,
+        ) -> Result<WorkflowReport> {
             let output = self.build_plan(&request).await?;
             let replacement = replacement_for_requested_path(&output, &request)?;
             let fs = ProjectFs::new(self.project_root.clone());
@@ -363,7 +432,18 @@ pub mod fix {
                 verification_results,
                 residual_risks: output.risks.clone(),
             };
-            let markdown = render_fix_apply(&apply_output);
+            let meta = ReportMeta {
+                task_id,
+                evidence: vec![format!(
+                    "Source: model replacement matched requested path `{}`.",
+                    request.path.to_string_lossy().replace('\\', "/")
+                )],
+                next_actions: vec![
+                    "Review the written file diff before delivery.".into(),
+                    "Address any failed verification result before treating this change as complete.".into(),
+                ],
+            };
+            let markdown = render_fix_apply_report(&apply_output, &meta);
             let path = report_path(&self.project_root, "fix-apply");
             write_report(&path, &markdown).await?;
 
@@ -474,17 +554,15 @@ Return only JSON matching this schema:
 pub mod learn {
     use std::path::{Path, PathBuf};
 
-    use anyhow::{bail, Result};
-    use uuid::Uuid;
-
     use crate::agent::{AgentClient, AgentRequest};
     use crate::context::loader::ContextLoader;
     use crate::core::report::LearningOutput;
-    use crate::core::task::LearningRecord;
+    use crate::core::task::{LearningRecord, TaskId};
     use crate::memory::jsonl::JsonlMemoryStore;
-    use crate::report::markdown::render_learning;
+    use crate::report::markdown::{render_learning, render_learning_report, ReportMeta};
     use crate::tools::fs::ProjectFs;
     use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
+    use anyhow::{bail, Result};
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct LearnRequest {
@@ -508,6 +586,14 @@ pub mod learn {
         }
 
         pub async fn run(&self, request: LearnRequest) -> Result<WorkflowReport> {
+            self.run_with_task_id(request, TaskId::new()).await
+        }
+
+        pub async fn run_with_task_id(
+            &self,
+            request: LearnRequest,
+            task_id: TaskId,
+        ) -> Result<WorkflowReport> {
             let fs = ProjectFs::new(self.project_root.clone());
             let source_report = match &request.source_report {
                 Some(path) => Some(fs.read_text(path).await?),
@@ -544,16 +630,21 @@ pub mod learn {
                 .append_text(Path::new(target_doc), &format!("\n\n{entry}"))
                 .await?;
             let memory_path = ".ai-human/memory/learnings.jsonl";
-            append_learning_record(&self.project_root, &output, &knowledge_path).await?;
+            append_learning_record(&self.project_root, &output, &knowledge_path, &task_id).await?;
 
-            let mut markdown = entry;
+            let meta = ReportMeta {
+                task_id,
+                evidence: output.evidence.clone(),
+                next_actions: vec![
+                    "Review the Markdown entry before treating it as a team rule.".into(),
+                    "Re-run related `ask`, `plan`, `impact`, or `review` commands to reuse this knowledge.".into(),
+                ],
+            };
+            let mut markdown = render_learning_report(&output, &meta);
             markdown.push_str("## Saved\n\n");
             markdown.push_str(&format!("- Knowledge written to {knowledge_path}\n"));
             markdown.push_str(&format!("- Memory written to {memory_path}\n"));
             markdown.push_str("- Source code files modified: no\n\n");
-            markdown.push_str("## Next\n\n");
-            markdown.push_str("- Review the Markdown entry before treating it as a team rule.\n");
-            markdown.push_str("- Re-run related `ask`, `plan`, `impact`, or `review` commands to reuse this knowledge.\n");
 
             let path = report_path(&self.project_root, "learn");
             write_report(&path, &markdown).await?;
@@ -598,11 +689,12 @@ pub mod learn {
         project_root: &Path,
         output: &LearningOutput,
         knowledge_path: &str,
+        task_id: &TaskId,
     ) -> Result<()> {
         let store = JsonlMemoryStore::new(project_root.join(".ai-human/memory"));
         store
             .append_learning(&LearningRecord {
-                task_id: format!("learn-{}", Uuid::new_v4()),
+                task_id: task_id.as_str().into(),
                 category: output.category.clone(),
                 title: output.title.clone(),
                 learning: output.rule.clone(),
@@ -630,17 +722,15 @@ Return only JSON matching this schema:
 pub mod review {
     use std::path::{Path, PathBuf};
 
-    use anyhow::{bail, Context, Result};
-    use tokio::fs;
-    use uuid::Uuid;
-
     use crate::agent::{AgentClient, AgentRequest};
     use crate::context::loader::ContextLoader;
     use crate::core::report::ReviewOutput;
-    use crate::core::task::ReviewRecord;
+    use crate::core::task::{ReviewRecord, TaskId};
     use crate::memory::jsonl::JsonlMemoryStore;
-    use crate::report::markdown::render_review;
+    use crate::report::markdown::{render_review_report, ReportMeta};
     use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
+    use anyhow::{bail, Context, Result};
+    use tokio::fs;
 
     pub struct ReviewWorkflow {
         project_root: PathBuf,
@@ -656,18 +746,44 @@ pub mod review {
         }
 
         pub async fn run_diff_file(&self, diff_file: PathBuf) -> Result<WorkflowReport> {
+            self.run_diff_file_with_task_id(diff_file, TaskId::new())
+                .await
+        }
+
+        pub async fn run_diff_file_with_task_id(
+            &self,
+            diff_file: PathBuf,
+            task_id: TaskId,
+        ) -> Result<WorkflowReport> {
             let (source, diff_text) = read_project_file(&self.project_root, &diff_file).await?;
-            self.run_text(&format!("DIFF FILE: {source}\n\n{diff_text}",))
+            self.run_text_with_task_id(&format!("DIFF FILE: {source}\n\n{diff_text}",), task_id)
                 .await
         }
 
         pub async fn run_path(&self, path: PathBuf) -> Result<WorkflowReport> {
+            self.run_path_with_task_id(path, TaskId::new()).await
+        }
+
+        pub async fn run_path_with_task_id(
+            &self,
+            path: PathBuf,
+            task_id: TaskId,
+        ) -> Result<WorkflowReport> {
             let (source, contents) = read_project_file(&self.project_root, &path).await?;
-            self.run_text(&format!("FILE: {source}\n\n{contents}"))
+            self.run_text_with_task_id(&format!("FILE: {source}\n\n{contents}"), task_id)
                 .await
         }
 
         pub async fn run_text(&self, review_input: &str) -> Result<WorkflowReport> {
+            self.run_text_with_task_id(review_input, TaskId::new())
+                .await
+        }
+
+        pub async fn run_text_with_task_id(
+            &self,
+            review_input: &str,
+            task_id: TaskId,
+        ) -> Result<WorkflowReport> {
             let context = ContextLoader::new(self.project_root.clone())
                 .load_for_input(review_input)
                 .await?;
@@ -681,10 +797,18 @@ pub mod review {
                     ),
                 })
                 .await?;
-            let markdown = render_review(&output);
+            let meta = ReportMeta {
+                task_id: task_id.clone(),
+                evidence: vec!["Source: review input and project context.".into()],
+                next_actions: vec![
+                    "Fix P0/P1 findings before delivery.".into(),
+                    "Run verification for listed test gaps.".into(),
+                ],
+            };
+            let markdown = render_review_report(&output, &meta);
             let path = report_path(&self.project_root, "review");
             write_report(&path, &markdown).await?;
-            append_review_findings(&self.project_root, &output).await?;
+            append_review_findings(&self.project_root, &output, &task_id).await?;
 
             Ok(WorkflowReport {
                 path: report_display_path(&self.project_root, &path),
@@ -762,14 +886,17 @@ Return only JSON matching this schema:
         Ok((display_path, text))
     }
 
-    async fn append_review_findings(project_root: &Path, output: &ReviewOutput) -> Result<()> {
-        let task_id = format!("review-{}", Uuid::new_v4());
+    async fn append_review_findings(
+        project_root: &Path,
+        output: &ReviewOutput,
+        task_id: &TaskId,
+    ) -> Result<()> {
         let store = JsonlMemoryStore::new(project_root.join(".ai-human/memory"));
 
         for finding in &output.findings {
             store
                 .append_review(&ReviewRecord {
-                    task_id: task_id.clone(),
+                    task_id: task_id.as_str().into(),
                     severity: finding.severity.clone(),
                     file: finding.file.clone(),
                     line: finding.line,

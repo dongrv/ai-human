@@ -61,6 +61,17 @@ fn ask_uses_mock_agent_response_from_env() {
 }
 
 #[test]
+fn ask_help_does_not_expose_unused_task_id() {
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.args(["ask", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--input"))
+        .stdout(predicate::str::contains("--task-id").not());
+}
+
+#[test]
 fn doctor_reports_uninitialized_project_with_next_command() {
     let temp = assert_fs::TempDir::new().unwrap();
     let mut cmd = Command::cargo_bin("ai-human").unwrap();
@@ -176,6 +187,31 @@ fn plan_uses_mock_agent_and_prints_report_path() {
 }
 
 #[test]
+fn plan_accepts_task_id_and_prints_it_in_report() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"title":"Mock Plan","goal":"Verify task id wiring","non_goals":[],"affected_areas":["cli"],"risks":[],"verification_plan":["cargo test"],"open_questions":[]}"#,
+    )
+    .args([
+        "plan",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--input",
+        "verify task id wiring",
+        "--task-id",
+        "pay-audit-001",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("- Task ID: pay-audit-001"))
+    .stdout(predicate::str::contains("Report written to "))
+    .stdout(predicate::str::contains("-plan.md"));
+}
+
+#[test]
 fn impact_accepts_optional_path_and_prints_report_path() {
     let temp = assert_fs::TempDir::new().unwrap();
     temp.child("src/lib.rs")
@@ -201,6 +237,34 @@ fn impact_accepts_optional_path_and_prints_report_path() {
     .stdout(predicate::str::contains("Mock impact"))
     .stdout(predicate::str::contains("Report written to "))
     .stdout(predicate::str::contains("-impact.md"));
+}
+
+#[test]
+fn impact_accepts_task_id_and_prints_it_in_report() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("src/lib.rs")
+        .write_str("pub fn demo() {}")
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"summary":"Mock impact","files":["src/lib.rs"],"call_chains":[],"protocol_risks":[],"state_risks":[],"persistence_risks":[],"test_entrypoints":["cargo test"]}"#,
+    )
+    .args([
+        "impact",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--input",
+        "check library impact",
+        "--path",
+        "src/lib.rs",
+        "--task-id",
+        "pay-audit-001",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("- Task ID: pay-audit-001"));
 }
 
 #[test]
@@ -253,6 +317,32 @@ fn review_accepts_path_and_prints_report_path() {
     .stdout(predicate::str::contains("Mock file review"))
     .stdout(predicate::str::contains("Report written to "))
     .stdout(predicate::str::contains("-review.md"));
+}
+
+#[test]
+fn review_accepts_task_id_and_prints_it_in_report() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("src/lib.rs")
+        .write_str("pub fn demo() {}")
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"summary":"Mock file review","findings":[],"test_gaps":[],"residual_risks":[]}"#,
+    )
+    .args([
+        "review",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--path",
+        "src/lib.rs",
+        "--task-id",
+        "pay-audit-001",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("- Task ID: pay-audit-001"));
 }
 
 #[test]
@@ -358,6 +448,29 @@ fn learn_uses_mock_agent_and_prints_written_paths() {
 }
 
 #[test]
+fn learn_accepts_task_id_and_prints_it_in_report() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"title":"Payment audit ownership","category":"rule","summary":"Audit rules have a single owner.","rule":"Payment audit rules are owned by service/pay.","evidence":["Team review conclusion"],"applies_to":["service/pay"],"target_doc":"engineering-rules"}"#,
+    )
+    .args([
+        "learn",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--input",
+        "Payment audit rules are owned by service/pay.",
+        "--task-id",
+        "pay-audit-001",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("- Task ID: pay-audit-001"));
+}
+
+#[test]
 fn fix_uses_mock_agent_and_prints_dry_run_report() {
     let temp = assert_fs::TempDir::new().unwrap();
     temp.child("service/pay/audit.go")
@@ -387,6 +500,34 @@ fn fix_uses_mock_agent_and_prints_dry_run_report() {
 
     temp.child("service/pay/audit.go")
         .assert("package pay\n\nfunc Audit() {}\n");
+}
+
+#[test]
+fn fix_accepts_task_id_and_prints_it_in_report() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("service/pay/audit.go")
+        .write_str("package pay\n\nfunc Audit() {}\n")
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env(
+        "AI_HUMAN_MOCK_RESPONSE",
+        r#"{"summary":"Add a nil guard before audit parsing.","target_files":["service/pay/audit.go"],"change_intent":"Prevent panic on missing audit payload.","risk_level":"low","risks":["Behavior changes for malformed payloads"],"verification_commands":["go test ./service/pay"],"replacement_files":[{"path":"service/pay/audit.go","contents":"package pay\n\nfunc Audit() {}\n"}],"open_questions":[]}"#,
+    )
+    .args([
+        "fix",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--input",
+        "Fix missing nil guard",
+        "--path",
+        "service/pay/audit.go",
+        "--task-id",
+        "pay-audit-001",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("- Task ID: pay-audit-001"));
 }
 
 #[test]

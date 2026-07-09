@@ -14,6 +14,7 @@ AI Human is a Rust rig-powered CLI digital human for service-side engineering wo
 - Capture reusable engineering learnings into Markdown knowledge and JSONL memory.
 - Preview and apply one-file local fixes with explicit `--apply`.
 - Render plan, impact, review, learning, and fix outputs as Markdown reports under `.ai-human/reports/`.
+- Connect related plan, impact, review, learn, and fix reports with `--task-id`.
 
 ## Quick Start
 
@@ -101,6 +102,16 @@ cargo run -- plan --input "analyze payment audit requirement"
 ```
 
 The plan workflow returns Markdown and writes a report ending in `-plan.md`.
+
+Use `--task-id` to connect a plan, impact analysis, review, learning, and fix to the same engineering task:
+
+```powershell
+cargo run -- plan --task-id pay-audit-001 --input "analyze payment audit requirement"
+cargo run -- impact --task-id pay-audit-001 --input "service/pay audit flow" --path service/pay/audit.go
+cargo run -- review --task-id pay-audit-001 --path service/pay/audit.go
+```
+
+If `--task-id` is omitted, AI Human generates one automatically and prints it in the report's `## Task` section.
 
 ## Impact Example
 

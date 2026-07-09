@@ -147,6 +147,33 @@ pub mod report {
 pub mod task {
     use chrono::{DateTime, Utc};
     use serde::{Deserialize, Serialize};
+    use uuid::Uuid;
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct TaskId(String);
+
+    impl TaskId {
+        pub fn new() -> Self {
+            Self(format!("task-{}", Uuid::new_v4()))
+        }
+
+        pub fn from_user_input(value: Option<String>) -> Self {
+            match value {
+                Some(value) if !value.trim().is_empty() => Self(value.trim().into()),
+                _ => Self::new(),
+            }
+        }
+
+        pub fn as_str(&self) -> &str {
+            &self.0
+        }
+    }
+
+    impl Default for TaskId {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     pub enum TaskType {

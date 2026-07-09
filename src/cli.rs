@@ -15,9 +15,9 @@ pub enum Command {
     #[command(about = "Create .ai-human project state")]
     Init(InitArgs),
     #[command(about = "Answer a project question using local context")]
-    Ask(TextInputArgs),
+    Ask(AskArgs),
     #[command(about = "Create a requirement or change plan")]
-    Plan(TextInputArgs),
+    Plan(PlanArgs),
     #[command(about = "Analyze files, call chains, risks, and tests")]
     Impact(ImpactArgs),
     #[command(about = "Review a diff or file for engineering risks")]
@@ -43,12 +43,24 @@ pub struct DoctorArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct TextInputArgs {
+pub struct AskArgs {
     #[arg(long, default_value = ".")]
     pub project_root: PathBuf,
 
     #[arg(long)]
     pub input: String,
+}
+
+#[derive(Debug, Args)]
+pub struct PlanArgs {
+    #[arg(long, default_value = ".")]
+    pub project_root: PathBuf,
+
+    #[arg(long)]
+    pub input: String,
+
+    #[arg(long, help = "Optional task id used to connect related reports")]
+    pub task_id: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -59,6 +71,9 @@ pub struct ImpactArgs {
     #[arg(long)]
     pub input: String,
 
+    #[arg(long, help = "Optional task id used to connect related reports")]
+    pub task_id: Option<String>,
+
     #[arg(long)]
     pub path: Option<PathBuf>,
 }
@@ -67,6 +82,9 @@ pub struct ImpactArgs {
 pub struct ReviewArgs {
     #[arg(long, default_value = ".")]
     pub project_root: PathBuf,
+
+    #[arg(long, help = "Optional task id used to connect related reports")]
+    pub task_id: Option<String>,
 
     #[arg(long)]
     pub diff_file: Option<PathBuf>,
@@ -86,6 +104,9 @@ pub struct LearnArgs {
 
     #[arg(long, help = "Lesson, conclusion, review finding, or rule to save")]
     pub input: String,
+
+    #[arg(long, help = "Optional task id used to connect related reports")]
+    pub task_id: Option<String>,
 
     #[arg(
         long,
@@ -118,6 +139,9 @@ pub struct FixArgs {
 
     #[arg(long, help = "Problem statement or desired small local fix")]
     pub input: String,
+
+    #[arg(long, help = "Optional task id used to connect related reports")]
+    pub task_id: Option<String>,
 
     #[arg(long, help = "Single target file to analyze or update")]
     pub path: PathBuf,
