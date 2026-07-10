@@ -191,6 +191,51 @@ fn ask_loads_mock_agent_response_from_project_env_file() {
 }
 
 #[test]
+fn ask_missing_openai_api_key_prints_recovery_hint() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env_remove("AI_HUMAN_MOCK_RESPONSE")
+        .env_remove("OPENAI_API_KEY")
+        .env_remove("OPENAI_BASE_URL")
+        .env_remove("AI_HUMAN_OPENAI_WIRE_API")
+        .args([
+            "ask",
+            "--project-root",
+            temp.path().to_str().unwrap(),
+            "--input",
+            "what should I verify?",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("OPENAI_API_KEY"))
+        .stderr(predicate::str::contains("Next: set OPENAI_API_KEY"))
+        .stderr(predicate::str::contains("ai-human doctor"));
+}
+
+#[test]
+fn ask_unsupported_provider_prints_recovery_hint() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.env("AI_HUMAN_MODEL_PROVIDER", "ollama")
+        .env_remove("AI_HUMAN_MOCK_RESPONSE")
+        .env_remove("OPENAI_API_KEY")
+        .args([
+            "ask",
+            "--project-root",
+            temp.path().to_str().unwrap(),
+            "--input",
+            "what should I verify?",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unsupported model provider"))
+        .stderr(predicate::str::contains("AI_HUMAN_MODEL_PROVIDER=openai"))
+        .stderr(predicate::str::contains("Next:"));
+}
+
+#[test]
 fn ask_rejects_unknown_openai_wire_api() {
     let temp = assert_fs::TempDir::new().unwrap();
     let mut cmd = Command::cargo_bin("ai-human").unwrap();

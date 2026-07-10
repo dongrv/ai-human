@@ -72,6 +72,8 @@ CLI commands load `.env` from `--project-root` before reading model configuratio
 In non-mock mode, AI Human sends the user input and loaded local project context to the configured model provider. Review provider policies and avoid sending sensitive project context to providers that are not approved for that data.
 The OpenAI provider uses rig's Responses API client by default. Set `AI_HUMAN_OPENAI_WIRE_API` to `responses` for `/responses` proxies, or `chat-completions` for `/chat/completions` proxies. `OPENAI_BASE_URL` is used as the exact API root before the endpoint path, so use `http://host:port` when the proxy serves `/responses`, or `http://host:port/v1` when it serves `/v1/responses`.
 
+Provider configuration failures include actionable recovery hints. Missing `OPENAI_API_KEY`, unsupported `AI_HUMAN_MODEL_PROVIDER`, invalid `AI_HUMAN_OPENAI_WIRE_API`, and endpoint status errors print a `Next:` step before exiting.
+
 Some OpenAI-compatible Responses proxies omit fields that rig currently requires on response output items, such as `output[].id` or `output[].status`. AI Human normalizes those missing fields before rig parses the response. To inspect the raw provider response during troubleshooting, set:
 
 ```powershell
@@ -148,7 +150,7 @@ Successful commands print a compact result summary so the next task is visible w
 - Next stage: ...
 ```
 
-Recoverable command errors include a `Next:` hint. For example, path and review-source errors tell you whether to pass an existing project file, choose either `--path` or `--diff-file`, or adjust `--project-root`.
+Recoverable command errors include a `Next:` hint. For example, path, review-source, task-inheritance, and provider configuration errors tell you what to change before retrying.
 
 AI Human also appends local command metrics to `.ai-human/memory/metrics.jsonl`. Each record contains the command name, success or failure status, duration, task id when available, report path when produced, and a short error summary on failure. Metrics do not include source file contents or user prompt text.
 

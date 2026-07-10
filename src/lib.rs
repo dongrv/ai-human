@@ -8,6 +8,7 @@ pub mod env;
 pub mod memory;
 pub mod metrics;
 pub mod policy;
+pub mod provider_error;
 pub mod report;
 pub mod task_index;
 pub mod tools;

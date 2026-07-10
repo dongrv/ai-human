@@ -17,6 +17,7 @@ use ai_human::config::load_project_config;
 use ai_human::core::task::{TaskId, TaskType};
 use ai_human::env::load_project_env;
 use ai_human::metrics::{CommandMetric, CommandStatus, MetricsStore};
+use ai_human::provider_error::provider_error_hint;
 use ai_human::task_index::{
     continuation_from_timeline, render_task_timeline, CompletedTaskReport, Continuation, TaskIndex,
     TaskTimeline,
@@ -44,7 +45,7 @@ async fn main() -> Result<()> {
 
     record_metric(&metric_context, &result, duration_ms(started)).await;
 
-    result.map(|_| ())
+    result.map(|_| ()).map_err(with_provider_recovery_hint)
 }
 
 async fn run(cli: Cli) -> Result<CommandOutcome> {
@@ -306,6 +307,15 @@ fn agent_from_env() -> Result<Box<dyn AgentClient>> {
         model,
         openai_wire_api,
     )))
+}
+
+fn with_provider_recovery_hint(error: anyhow::Error) -> anyhow::Error {
+    let message = error.to_string();
+    if let Some(hint) = provider_error_hint(&message) {
+        error.context(hint)
+    } else {
+        error
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

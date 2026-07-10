@@ -589,15 +589,16 @@ v1 默认对 High 风险阻断 apply。
 - 报告型命令已写入 `.ai-human/memory/tasks.jsonl`，`task --id` 可查看同一任务的报告链路，并输出可复制的 `Suggested command:`。
 - 命令已写入 `.ai-human/memory/metrics.jsonl`，记录本地成功率、失败摘要、耗时和报告产出。
 - `impact --from-task`、`review --from-task`、`fix --from-task`、`learn --from-task` 已支持从任务上下文继承 task id、input、path 或 source report。
+- 模型/provider 配置错误已覆盖 `OPENAI_API_KEY` 缺失、不支持的 `AI_HUMAN_MODEL_PROVIDER`、非法 `AI_HUMAN_OPENAI_WIRE_API` 和 endpoint 状态错误的 `Next:` 恢复提示。
 
 部分完成：
 
-- 高频可恢复错误已输出 `Next:` 建议，仍需覆盖所有模型/provider 配置错误。
+- 高频可恢复错误已输出 `Next:` 建议，仍需继续细分 provider 网络、认证、限流等运行时错误。
 - 写操作已记录报告路径和验证结果，任务索引已有最小可查询能力，仍需扩展失败恢复和 Evidence/Rule Hit 结构化。
 
 待推进：
 
-- 覆盖所有模型/provider 配置错误的 `Next:` 恢复提示。
+- 细化 provider 网络、认证、限流等运行时错误分类和恢复建议。
 - 增强 Evidence/Rule Hit 结构化，让报告更明确地区分代码、规则、历史报告和模型推断。
 
 ## 16. 下一步建议
