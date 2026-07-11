@@ -15,7 +15,7 @@ pub mod markdown {
     }
 
     impl EvidenceKind {
-        fn label(&self) -> &'static str {
+        pub fn label(&self) -> &'static str {
             match self {
                 Self::ProjectContext => "Project Context",
                 Self::File => "File",
@@ -34,6 +34,10 @@ pub mod markdown {
     }
 
     impl EvidenceEntry {
+        pub fn kind_label(&self) -> &'static str {
+            self.kind.label()
+        }
+
         pub fn project_context(detail: impl Into<String>) -> Self {
             Self {
                 kind: EvidenceKind::ProjectContext,

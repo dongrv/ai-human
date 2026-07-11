@@ -6,10 +6,25 @@ use tokio::fs::{self, OpenOptions};
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
+use crate::report::markdown::{EvidenceEntry, ReportMeta, RuleHit};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowReport {
     pub path: String,
     pub markdown: String,
+    pub evidence: Vec<EvidenceEntry>,
+    pub rule_hits: Vec<RuleHit>,
+}
+
+impl WorkflowReport {
+    fn from_meta(path: String, markdown: String, meta: ReportMeta) -> Self {
+        Self {
+            path,
+            markdown,
+            evidence: meta.evidence,
+            rule_hits: meta.rule_hits,
+        }
+    }
 }
 
 fn report_path(project_root: &Path, task_suffix: &str) -> PathBuf {
@@ -296,10 +311,11 @@ pub mod plan {
             let path = report_path(&self.project_root, "plan");
             write_report(&path, &markdown).await?;
 
-            Ok(WorkflowReport {
-                path: report_display_path(&self.project_root, &path),
+            Ok(WorkflowReport::from_meta(
+                report_display_path(&self.project_root, &path),
                 markdown,
-            })
+                meta,
+            ))
         }
     }
 
@@ -375,10 +391,11 @@ pub mod impact {
             let path = report_path(&self.project_root, "impact");
             write_report(&path, &markdown).await?;
 
-            Ok(WorkflowReport {
-                path: report_display_path(&self.project_root, &path),
+            Ok(WorkflowReport::from_meta(
+                report_display_path(&self.project_root, &path),
                 markdown,
-            })
+                meta,
+            ))
         }
     }
 
@@ -492,10 +509,11 @@ pub mod fix {
             let path = report_path(&self.project_root, "fix-dry-run");
             write_report(&path, &markdown).await?;
 
-            Ok(WorkflowReport {
-                path: report_display_path(&self.project_root, &path),
+            Ok(WorkflowReport::from_meta(
+                report_display_path(&self.project_root, &path),
                 markdown,
-            })
+                meta,
+            ))
         }
 
         pub async fn run_apply(&self, request: FixRequest) -> Result<WorkflowReport> {
@@ -534,10 +552,11 @@ pub mod fix {
             let path = report_path(&self.project_root, "fix-apply");
             write_report(&path, &markdown).await?;
 
-            Ok(WorkflowReport {
-                path: report_display_path(&self.project_root, &path),
+            Ok(WorkflowReport::from_meta(
+                report_display_path(&self.project_root, &path),
                 markdown,
-            })
+                meta,
+            ))
         }
 
         async fn build_plan(&self, request: &FixRequest) -> Result<FixPlanContext> {
@@ -795,10 +814,11 @@ pub mod learn {
             let path = report_path(&self.project_root, "learn");
             write_report(&path, &markdown).await?;
 
-            Ok(WorkflowReport {
-                path: report_display_path(&self.project_root, &path),
+            Ok(WorkflowReport::from_meta(
+                report_display_path(&self.project_root, &path),
                 markdown,
-            })
+                meta,
+            ))
         }
     }
 
@@ -986,10 +1006,11 @@ pub mod review {
             write_report(&path, &markdown).await?;
             append_review_findings(&self.project_root, &output, &task_id).await?;
 
-            Ok(WorkflowReport {
-                path: report_display_path(&self.project_root, &path),
+            Ok(WorkflowReport::from_meta(
+                report_display_path(&self.project_root, &path),
                 markdown,
-            })
+                meta,
+            ))
         }
     }
 

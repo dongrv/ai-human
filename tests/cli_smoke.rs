@@ -282,6 +282,9 @@ fn plan_uses_mock_agent_and_prints_report_path() {
 #[test]
 fn plan_accepts_task_id_and_prints_it_in_report() {
     let temp = assert_fs::TempDir::new().unwrap();
+    temp.child(".ai-human/knowledge/engineering-rules.md")
+        .write_str("# Engineering Rules\n\nAlways run focused tests before delivery.")
+        .unwrap();
     let mut cmd = Command::cargo_bin("ai-human").unwrap();
 
     cmd.env(
@@ -309,11 +312,33 @@ fn plan_accepts_task_id_and_prints_it_in_report() {
         .assert(predicate::str::contains(
             r#""report_path":".ai-human/reports/"#,
         ))
+        .assert(predicate::str::contains(r#""evidence":[{"kind":"Project Context","detail":"Repository knowledge and path hints loaded."}]"#))
+        .assert(predicate::str::contains(r#""rule_hits":[{"source":".ai-human/knowledge/engineering-rules.md","detail":"Project engineering rules were included in model context."}]"#))
         .assert(predicate::str::contains("-plan.md"));
     temp.child(".ai-human/memory/metrics.jsonl")
         .assert(predicate::str::contains(r#""command":"plan""#))
         .assert(predicate::str::contains(r#""status":"success""#))
         .assert(predicate::str::contains(r#""task_id":"pay-audit-001""#));
+
+    let mut task_cmd = Command::cargo_bin("ai-human").unwrap();
+    task_cmd
+        .args([
+            "task",
+            "--project-root",
+            temp.path().to_str().unwrap(),
+            "--id",
+            "pay-audit-001",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("## Evidence Trail"))
+        .stdout(predicate::str::contains(
+            "- plan: [Project Context] Repository knowledge and path hints loaded.",
+        ))
+        .stdout(predicate::str::contains("## Rule Hits"))
+        .stdout(predicate::str::contains(
+            "- plan: [.ai-human/knowledge/engineering-rules.md] Project engineering rules were included in model context.",
+        ));
 }
 
 #[test]

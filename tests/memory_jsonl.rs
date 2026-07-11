@@ -248,5 +248,7 @@ fn task_record(task_id: &str, summary: &str) -> TaskRecord {
         completed_at: Some(Utc::now()),
         summary: summary.into(),
         report_path: Some(format!(".ai-human/reports/{task_id}-plan.md")),
+        evidence: Vec::new(),
+        rule_hits: Vec::new(),
     }
 }

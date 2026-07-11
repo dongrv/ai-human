@@ -14,7 +14,7 @@ use ai_human::cli_output::{
     ResultSummary,
 };
 use ai_human::config::load_project_config;
-use ai_human::core::task::{TaskId, TaskType};
+use ai_human::core::task::{EvidenceRecord, RuleHitRecord, TaskId, TaskType};
 use ai_human::env::load_project_env;
 use ai_human::metrics::{CommandMetric, CommandStatus, MetricsStore};
 use ai_human::provider_error::provider_error_hint;
@@ -401,6 +401,22 @@ async fn record_completed_task(
             input: input.into(),
             summary: report_summary(&report.markdown),
             report_path: report.path.clone(),
+            evidence: report
+                .evidence
+                .iter()
+                .map(|entry| EvidenceRecord {
+                    kind: entry.kind_label().into(),
+                    detail: entry.detail.clone(),
+                })
+                .collect(),
+            rule_hits: report
+                .rule_hits
+                .iter()
+                .map(|hit| RuleHitRecord {
+                    source: hit.source.clone(),
+                    detail: hit.detail.clone(),
+                })
+                .collect(),
             started_at,
             completed_at,
         })

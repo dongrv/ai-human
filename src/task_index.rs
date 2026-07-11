@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 
-use crate::core::task::{TaskRecord, TaskStatus, TaskType};
+use crate::core::task::{EvidenceRecord, RuleHitRecord, TaskRecord, TaskStatus, TaskType};
 use crate::memory::jsonl::JsonlMemoryStore;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,6 +14,8 @@ pub struct CompletedTaskReport {
     pub input: String,
     pub summary: String,
     pub report_path: String,
+    pub evidence: Vec<EvidenceRecord>,
+    pub rule_hits: Vec<RuleHitRecord>,
     pub started_at: DateTime<Utc>,
     pub completed_at: DateTime<Utc>,
 }
@@ -70,6 +72,8 @@ impl TaskIndex {
                 completed_at: Some(report.completed_at),
                 summary: report.summary,
                 report_path: Some(report.report_path),
+                evidence: report.evidence,
+                rule_hits: report.rule_hits,
             })
             .await
     }
@@ -135,6 +139,9 @@ pub fn render_task_timeline(timeline: &TaskTimeline) -> String {
         markdown.push('\n');
     }
 
+    push_evidence_trail(&mut markdown, &timeline.records);
+    push_rule_hits(&mut markdown, &timeline.records);
+
     markdown.push_str("## Next\n\n");
     if timeline.records.is_empty() {
         markdown.push_str(&format!(
@@ -153,6 +160,45 @@ pub fn render_task_timeline(timeline: &TaskTimeline) -> String {
     }
 
     markdown
+}
+
+fn push_evidence_trail(markdown: &mut String, records: &[TaskRecord]) {
+    markdown.push_str("## Evidence Trail\n\n");
+    let mut found = false;
+
+    for record in records {
+        let label = task_type_label(&record.task_type);
+        for evidence in &record.evidence {
+            found = true;
+            markdown.push_str(&format!(
+                "- {label}: [{}] {}\n",
+                evidence.kind, evidence.detail
+            ));
+        }
+    }
+
+    if !found {
+        markdown.push_str("- None recorded.\n");
+    }
+    markdown.push('\n');
+}
+
+fn push_rule_hits(markdown: &mut String, records: &[TaskRecord]) {
+    markdown.push_str("## Rule Hits\n\n");
+    let mut found = false;
+
+    for record in records {
+        let label = task_type_label(&record.task_type);
+        for hit in &record.rule_hits {
+            found = true;
+            markdown.push_str(&format!("- {label}: [{}] {}\n", hit.source, hit.detail));
+        }
+    }
+
+    if !found {
+        markdown.push_str("- None recorded.\n");
+    }
+    markdown.push('\n');
 }
 
 pub fn continuation_from_timeline(timeline: &TaskTimeline) -> Option<Continuation> {

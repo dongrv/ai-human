@@ -193,6 +193,18 @@ pub mod task {
     }
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct EvidenceRecord {
+        pub kind: String,
+        pub detail: String,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct RuleHitRecord {
+        pub source: String,
+        pub detail: String,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
     pub struct TaskRecord {
         pub task_id: String,
         pub task_type: TaskType,
@@ -203,6 +215,10 @@ pub mod task {
         pub completed_at: Option<DateTime<Utc>>,
         pub summary: String,
         pub report_path: Option<String>,
+        #[serde(default)]
+        pub evidence: Vec<EvidenceRecord>,
+        #[serde(default)]
+        pub rule_hits: Vec<RuleHitRecord>,
     }
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
