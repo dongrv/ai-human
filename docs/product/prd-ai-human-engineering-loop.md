@@ -578,7 +578,7 @@ v1 默认对 High 风险阻断 apply。
 - 每一次写操作都能在报告中追溯输入、写入文件、验证命令和验证结果。
 - 所有命令失败时，错误信息都包含可执行的下一步建议。
 
-### 15.1 当前实现状态（2026-07-09）
+### 15.1 当前实现状态（2026-07-11）
 
 已完成：
 
@@ -590,16 +590,17 @@ v1 默认对 High 风险阻断 apply。
 - 命令已写入 `.ai-human/memory/metrics.jsonl`，记录本地成功率、失败摘要、耗时和报告产出。
 - `impact --from-task`、`review --from-task`、`fix --from-task`、`learn --from-task` 已支持从任务上下文继承 task id、input、path 或 source report。
 - 模型/provider 配置错误已覆盖 `OPENAI_API_KEY` 缺失、不支持的 `AI_HUMAN_MODEL_PROVIDER`、非法 `AI_HUMAN_OPENAI_WIRE_API` 和 endpoint 状态错误的 `Next:` 恢复提示。
+- 主要报告已输出结构化 Evidence 类型标签，覆盖 Project Context、File、History Report、Command、Model Inference、User Input，并新增 `## Rule Hits` 展示命中的团队规则来源。
 
 部分完成：
 
 - 高频可恢复错误已输出 `Next:` 建议，仍需继续细分 provider 网络、认证、限流等运行时错误。
-- 写操作已记录报告路径和验证结果，任务索引已有最小可查询能力，仍需扩展失败恢复和 Evidence/Rule Hit 结构化。
+- 写操作已记录报告路径和验证结果，任务索引已有最小可查询能力，仍需扩展失败恢复和 Evidence/Rule Hit 的跨报告查询能力。
 
 待推进：
 
 - 细化 provider 网络、认证、限流等运行时错误分类和恢复建议。
-- 增强 Evidence/Rule Hit 结构化，让报告更明确地区分代码、规则、历史报告和模型推断。
+- 将 Evidence/Rule Hit 写入任务索引或 JSONL 记忆，用于后续跨报告查询和管理视图。
 
 ## 16. 下一步建议
 

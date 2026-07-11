@@ -152,6 +152,8 @@ Successful commands print a compact result summary so the next task is visible w
 
 Recoverable command errors include a `Next:` hint. For example, path, review-source, task-inheritance, and provider configuration errors tell you what to change before retrying.
 
+Main reports include typed evidence entries such as `[File]`, `[Project Context]`, `[History Report]`, `[Command]`, and `[Model Inference]`. Reports also include `## Rule Hits` when loaded context contains team rule sources such as `AGENTS.md`, `.agents/README.md`, `.ai-human/knowledge/engineering-rules.md`, or workflow knowledge files.
+
 AI Human also appends local command metrics to `.ai-human/memory/metrics.jsonl`. Each record contains the command name, success or failure status, duration, task id when available, report path when produced, and a short error summary on failure. Metrics do not include source file contents or user prompt text.
 
 ## Impact Example

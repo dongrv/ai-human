@@ -105,6 +105,37 @@ async fn plan_workflow_report_includes_task_id_and_unified_sections() {
 }
 
 #[tokio::test]
+async fn plan_report_structures_evidence_and_rule_hits() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child(".ai-human/knowledge/engineering-rules.md")
+        .write_str("# Engineering Rules\n\nAlways run focused tests before delivery.")
+        .unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "title":"Add payment audit",
+        "goal":"Design a safe payment audit change",
+        "non_goals":[],
+        "affected_areas":["service/pay"],
+        "risks":[],
+        "verification_plan":["go test ./service/pay"],
+        "open_questions":[]
+    }"#
+    .into()]);
+
+    let report = PlanWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run("add payment audit")
+        .await
+        .unwrap();
+
+    assert!(report
+        .markdown
+        .contains("- [Project Context] Repository knowledge and path hints loaded."));
+    assert!(report.markdown.contains("## Rule Hits"));
+    assert!(report.markdown.contains(
+        "- [.ai-human/knowledge/engineering-rules.md] Project engineering rules were included in model context."
+    ));
+}
+
+#[tokio::test]
 async fn repeated_plan_runs_create_distinct_reports_without_overwriting() {
     let temp = assert_fs::TempDir::new().unwrap();
     let agent = MockAgentClient::new(vec![
@@ -554,6 +585,41 @@ async fn learn_workflow_reads_source_report_into_model_prompt() {
 }
 
 #[tokio::test]
+async fn learn_report_marks_source_report_and_model_evidence_separately() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child(".ai-human/reports/review.md")
+        .write_str("# Review\n\nPersist audit rows before success.")
+        .unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "title":"Persist audit rows",
+        "category":"rule",
+        "summary":"Persistence must happen before success.",
+        "rule":"Persist audit rows before returning success.",
+        "evidence":["Review report"],
+        "applies_to":["service/pay"],
+        "target_doc":"engineering-rules"
+    }"#
+    .into()]);
+
+    let report = LearnWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run(LearnRequest {
+            input: "Turn the review into a rule.".into(),
+            category: "rule".into(),
+            target: None,
+            source_report: Some(".ai-human/reports/review.md".into()),
+        })
+        .await
+        .unwrap();
+
+    assert!(report
+        .markdown
+        .contains("- [History Report] Source report `.ai-human/reports/review.md` loaded."));
+    assert!(report
+        .markdown
+        .contains("- [Model Inference] Review report"));
+}
+
+#[tokio::test]
 async fn learn_workflow_rejects_source_report_outside_project_root() {
     let project = assert_fs::TempDir::new().unwrap();
     let outside = assert_fs::TempDir::new().unwrap();
@@ -778,6 +844,9 @@ async fn fix_apply_writes_replacement_and_delivery_report() {
     assert_eq!(target, "pub fn value() -> i32 { 2 }\n");
     assert!(report.markdown.contains("# Fix Apply Report"));
     assert!(report.markdown.contains("Source code files modified: yes"));
+    assert!(report
+        .markdown
+        .contains("- [Command] `cargo --version` succeeded with exit 0."));
     assert!(report.markdown.contains("cargo --version"));
     assert!(report.path.ends_with("-fix-apply.md"));
     temp.child(&report.path).assert(report.markdown.as_str());
@@ -925,6 +994,30 @@ async fn review_workflow_reads_file_content_from_path() {
 
     assert!(request.user_prompt.contains("FILE: src/lib.rs"));
     assert!(request.user_prompt.contains("pub fn reviewed_symbol() {}"));
+}
+
+#[tokio::test]
+async fn review_path_report_marks_file_input_as_file_evidence() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child("src/lib.rs")
+        .write_str("pub fn reviewed_symbol() {}")
+        .unwrap();
+    let agent = MockAgentClient::new(vec![r#"{
+        "summary":"No findings",
+        "findings":[],
+        "test_gaps":[],
+        "residual_risks":[]
+    }"#
+    .into()]);
+
+    let report = ReviewWorkflow::new(temp.path().to_path_buf(), Box::new(agent))
+        .run_path("src/lib.rs".into())
+        .await
+        .unwrap();
+
+    assert!(report
+        .markdown
+        .contains("- [File] Reviewed file `src/lib.rs`."));
 }
 
 #[tokio::test]

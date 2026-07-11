@@ -5,10 +5,128 @@ pub mod markdown {
     use crate::core::task::TaskId;
 
     #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum EvidenceKind {
+        ProjectContext,
+        File,
+        HistoryReport,
+        Command,
+        ModelInference,
+        UserInput,
+    }
+
+    impl EvidenceKind {
+        fn label(&self) -> &'static str {
+            match self {
+                Self::ProjectContext => "Project Context",
+                Self::File => "File",
+                Self::HistoryReport => "History Report",
+                Self::Command => "Command",
+                Self::ModelInference => "Model Inference",
+                Self::UserInput => "User Input",
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct EvidenceEntry {
+        pub kind: EvidenceKind,
+        pub detail: String,
+    }
+
+    impl EvidenceEntry {
+        pub fn project_context(detail: impl Into<String>) -> Self {
+            Self {
+                kind: EvidenceKind::ProjectContext,
+                detail: detail.into(),
+            }
+        }
+
+        pub fn file(detail: impl Into<String>) -> Self {
+            Self {
+                kind: EvidenceKind::File,
+                detail: detail.into(),
+            }
+        }
+
+        pub fn history_report(detail: impl Into<String>) -> Self {
+            Self {
+                kind: EvidenceKind::HistoryReport,
+                detail: detail.into(),
+            }
+        }
+
+        pub fn command(detail: impl Into<String>) -> Self {
+            Self {
+                kind: EvidenceKind::Command,
+                detail: detail.into(),
+            }
+        }
+
+        pub fn model_inference(detail: impl Into<String>) -> Self {
+            Self {
+                kind: EvidenceKind::ModelInference,
+                detail: detail.into(),
+            }
+        }
+
+        pub fn user_input(detail: impl Into<String>) -> Self {
+            Self {
+                kind: EvidenceKind::UserInput,
+                detail: detail.into(),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct RuleHit {
+        pub source: String,
+        pub detail: String,
+    }
+
+    impl RuleHit {
+        pub fn new(source: impl Into<String>, detail: impl Into<String>) -> Self {
+            Self {
+                source: source.into(),
+                detail: detail.into(),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct ReportMeta {
         pub task_id: TaskId,
-        pub evidence: Vec<String>,
+        pub evidence: Vec<EvidenceEntry>,
+        pub rule_hits: Vec<RuleHit>,
         pub next_actions: Vec<String>,
+    }
+
+    pub fn rule_hits_from_sources(sources: &[String]) -> Vec<RuleHit> {
+        sources
+            .iter()
+            .filter_map(|source| {
+                let normalized = source.to_ascii_lowercase();
+                if normalized == "agents.md" || normalized == ".agents/readme.md" {
+                    Some(RuleHit::new(
+                        source,
+                        "Agent and team instructions were included in model context.",
+                    ))
+                } else if normalized == ".ai-human/knowledge/engineering-rules.md" {
+                    Some(RuleHit::new(
+                        source,
+                        "Project engineering rules were included in model context.",
+                    ))
+                } else if normalized.starts_with(".ai-human/knowledge/workflows/")
+                    && normalized.ends_with(".md")
+                {
+                    Some(RuleHit::new(
+                        source,
+                        "Project workflow guidance was included in model context.",
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     pub fn render_plan(output: &PlanOutput) -> String {
@@ -31,7 +149,8 @@ pub mod markdown {
         md.push_str(&format!("# {}\n\n", output.title));
         md.push_str(&format!("## Summary\n\n{}\n\n", output.goal));
         push_task(&mut md, meta);
-        push_list(&mut md, "Evidence", &meta.evidence);
+        push_evidence(&mut md, &meta.evidence);
+        push_rule_hits(&mut md, &meta.rule_hits);
         push_list(&mut md, "Non Goals", &output.non_goals);
         push_list(&mut md, "Affected Areas", &output.affected_areas);
         push_list(&mut md, "Risks", &output.risks);
@@ -63,7 +182,8 @@ pub mod markdown {
         md.push_str("# Impact Analysis\n\n");
         md.push_str(&format!("## Summary\n\n{}\n\n", output.summary));
         push_task(&mut md, meta);
-        push_list(&mut md, "Evidence", &meta.evidence);
+        push_evidence(&mut md, &meta.evidence);
+        push_rule_hits(&mut md, &meta.rule_hits);
         push_list(&mut md, "Files", &output.files);
         push_list(&mut md, "Call Chains", &output.call_chains);
         push_risk_level(&mut md, impact_risk_level(output));
@@ -112,7 +232,8 @@ pub mod markdown {
         md.push_str("# Code Review\n\n");
         md.push_str(&format!("## Summary\n\n{}\n\n", output.summary));
         push_task(&mut md, meta);
-        push_list(&mut md, "Evidence", &meta.evidence);
+        push_evidence(&mut md, &meta.evidence);
+        push_rule_hits(&mut md, &meta.rule_hits);
         push_findings(&mut md, output);
         push_risk_level(&mut md, review_risk_level(output));
         push_list(&mut md, "Test Gaps", &output.test_gaps);
@@ -149,7 +270,8 @@ pub mod markdown {
         md.push_str(&format!("{}\n\n", output.category));
         md.push_str("## Rule\n\n");
         md.push_str(&format!("{}\n\n", output.rule));
-        push_list(&mut md, "Evidence", &output.evidence);
+        push_evidence(&mut md, &meta.evidence);
+        push_rule_hits(&mut md, &meta.rule_hits);
         push_list(&mut md, "Applies To", &output.applies_to);
         push_list(
             &mut md,
@@ -196,7 +318,8 @@ pub mod markdown {
         md.push_str("## Summary\n\n");
         md.push_str(&format!("{}\n\n", output.summary));
         push_task(&mut md, meta);
-        push_list(&mut md, "Evidence", &meta.evidence);
+        push_evidence(&mut md, &meta.evidence);
+        push_rule_hits(&mut md, &meta.rule_hits);
         md.push_str("## Result\n\n");
         md.push_str("- Source code files modified: no\n");
         md.push_str(
@@ -242,7 +365,8 @@ pub mod markdown {
         md.push_str("## Summary\n\n");
         md.push_str(&format!("{}\n\n", output.summary));
         push_task(&mut md, meta);
-        push_list(&mut md, "Evidence", &meta.evidence);
+        push_evidence(&mut md, &meta.evidence);
+        push_rule_hits(&mut md, &meta.rule_hits);
         md.push_str("## Result\n\n");
         md.push_str("- Source code files modified: yes\n\n");
         push_list(&mut md, "Written Files", &output.written_files);
@@ -376,6 +500,32 @@ pub mod markdown {
 
         for value in values {
             md.push_str(&format!("- {value}\n"));
+        }
+        md.push('\n');
+    }
+
+    fn push_evidence(md: &mut String, evidence: &[EvidenceEntry]) {
+        md.push_str("## Evidence\n\n");
+        if evidence.is_empty() {
+            md.push_str("- None.\n\n");
+            return;
+        }
+
+        for entry in evidence {
+            md.push_str(&format!("- [{}] {}\n", entry.kind.label(), entry.detail));
+        }
+        md.push('\n');
+    }
+
+    fn push_rule_hits(md: &mut String, rule_hits: &[RuleHit]) {
+        md.push_str("## Rule Hits\n\n");
+        if rule_hits.is_empty() {
+            md.push_str("- None.\n\n");
+            return;
+        }
+
+        for hit in rule_hits {
+            md.push_str(&format!("- [{}] {}\n", hit.source, hit.detail));
         }
         md.push('\n');
     }

@@ -242,7 +242,9 @@ pub mod plan {
     use crate::context::loader::ContextLoader;
     use crate::core::report::PlanOutput;
     use crate::core::task::TaskId;
-    use crate::report::markdown::{render_plan_report, ReportMeta};
+    use crate::report::markdown::{
+        render_plan_report, rule_hits_from_sources, EvidenceEntry, ReportMeta,
+    };
     use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
 
     pub struct PlanWorkflow {
@@ -279,10 +281,10 @@ pub mod plan {
                 .await?;
             let meta = ReportMeta {
                 task_id,
-                evidence: vec![
-                    "Source: project context loaded from repository knowledge and path hints."
-                        .into(),
-                ],
+                evidence: vec![EvidenceEntry::project_context(
+                    "Repository knowledge and path hints loaded.",
+                )],
+                rule_hits: rule_hits_from_sources(&context.sources),
                 next_actions: vec![
                     "Next stage: run `ai-human impact` for the planned change before editing code."
                         .into(),
@@ -324,7 +326,9 @@ pub mod impact {
     use crate::context::loader::ContextLoader;
     use crate::core::report::ImpactOutput;
     use crate::core::task::TaskId;
-    use crate::report::markdown::{render_impact_report, ReportMeta};
+    use crate::report::markdown::{
+        render_impact_report, rule_hits_from_sources, EvidenceEntry, ReportMeta,
+    };
     use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
 
     pub struct ImpactWorkflow {
@@ -361,10 +365,10 @@ pub mod impact {
                 .await?;
             let meta = ReportMeta {
                 task_id,
-                evidence: vec![
-                    "Source: project context loaded from repository knowledge and path hints."
-                        .into(),
-                ],
+                evidence: vec![EvidenceEntry::project_context(
+                    "Repository knowledge and path hints loaded.",
+                )],
+                rule_hits: rule_hits_from_sources(&context.sources),
                 next_actions: impact_next_actions(&output),
             };
             let markdown = render_impact_report(&output, &meta);
@@ -428,7 +432,10 @@ pub mod fix {
     use crate::context::loader::ContextLoader;
     use crate::core::report::{FixApplyOutput, FixPlanOutput, VerificationResult};
     use crate::core::task::TaskId;
-    use crate::report::markdown::{render_fix_apply_report, render_fix_plan_report, ReportMeta};
+    use crate::report::markdown::{
+        render_fix_apply_report, render_fix_plan_report, rule_hits_from_sources, EvidenceEntry,
+        ReportMeta,
+    };
     use crate::tools::command::{CommandResult, CommandRunner};
     use crate::tools::fs::ProjectFs;
     use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
@@ -444,6 +451,11 @@ pub mod fix {
     pub struct FixWorkflow {
         project_root: PathBuf,
         agent: Box<dyn AgentClient>,
+    }
+
+    struct FixPlanContext {
+        output: FixPlanOutput,
+        context_sources: Vec<String>,
     }
 
     impl FixWorkflow {
@@ -463,13 +475,11 @@ pub mod fix {
             request: FixRequest,
             task_id: TaskId,
         ) -> Result<WorkflowReport> {
-            let output = self.build_plan(&request).await?;
+            let plan = self.build_plan(&request).await?;
             let meta = ReportMeta {
                 task_id,
-                evidence: vec![format!(
-                    "Source: target file `{}` and project context.",
-                    request.path.to_string_lossy().replace('\\', "/")
-                )],
+                evidence: fix_plan_evidence(&request),
+                rule_hits: rule_hits_from_sources(&plan.context_sources),
                 next_actions: vec![
                     "Next stage: run `ai-human fix --apply` only after the dry-run is reviewed."
                         .into(),
@@ -478,7 +488,7 @@ pub mod fix {
                         .into(),
                 ],
             };
-            let markdown = render_fix_plan_report(&output, &meta);
+            let markdown = render_fix_plan_report(&plan.output, &meta);
             let path = report_path(&self.project_root, "fix-dry-run");
             write_report(&path, &markdown).await?;
 
@@ -497,24 +507,22 @@ pub mod fix {
             request: FixRequest,
             task_id: TaskId,
         ) -> Result<WorkflowReport> {
-            let output = self.build_plan(&request).await?;
-            reject_high_risk_apply(&output)?;
-            let replacement = replacement_for_requested_path(&output, &request)?;
+            let plan = self.build_plan(&request).await?;
+            reject_high_risk_apply(&plan.output)?;
+            let replacement = replacement_for_requested_path(&plan.output, &request)?;
             let fs = ProjectFs::new(self.project_root.clone());
             let written_path = fs.write_text(&request.path, &replacement.contents).await?;
             let verification_results = self.run_requested_commands(&request).await?;
             let apply_output = FixApplyOutput {
-                summary: output.summary.clone(),
+                summary: plan.output.summary.clone(),
                 written_files: vec![written_path],
                 verification_results,
-                residual_risks: output.risks.clone(),
+                residual_risks: plan.output.risks.clone(),
             };
             let meta = ReportMeta {
                 task_id,
-                evidence: vec![format!(
-                    "Source: model replacement matched requested path `{}`.",
-                    request.path.to_string_lossy().replace('\\', "/")
-                )],
+                evidence: fix_apply_evidence(&request, &apply_output),
+                rule_hits: rule_hits_from_sources(&plan.context_sources),
                 next_actions: vec![
                     "Next stage: run `ai-human learn` if this fix produced a reusable team rule."
                         .into(),
@@ -532,14 +540,15 @@ pub mod fix {
             })
         }
 
-        async fn build_plan(&self, request: &FixRequest) -> Result<FixPlanOutput> {
+        async fn build_plan(&self, request: &FixRequest) -> Result<FixPlanContext> {
             let fs = ProjectFs::new(self.project_root.clone());
             let target_file = fs.read_text(&request.path).await?;
             let context = ContextLoader::new(self.project_root.clone())
                 .load_for_input(&request.input)
                 .await?;
 
-            self.agent
+            let output = self
+                .agent
                 .complete_json(AgentRequest {
                     system_prompt: FIX_SYSTEM_PROMPT.into(),
                     user_prompt: format!(
@@ -552,7 +561,12 @@ pub mod fix {
                         context.combined_text
                     ),
                 })
-                .await
+                .await?;
+
+            Ok(FixPlanContext {
+                output,
+                context_sources: context.sources,
+            })
         }
 
         async fn run_requested_commands(
@@ -571,6 +585,45 @@ pub mod fix {
 
             Ok(results)
         }
+    }
+
+    fn fix_plan_evidence(request: &FixRequest) -> Vec<EvidenceEntry> {
+        vec![
+            EvidenceEntry::file(format!(
+                "Target file `{}` loaded.",
+                request.path.to_string_lossy().replace('\\', "/")
+            )),
+            EvidenceEntry::project_context("Repository knowledge and path hints loaded."),
+            EvidenceEntry::model_inference("Model produced the dry-run fix plan."),
+        ]
+    }
+
+    fn fix_apply_evidence(request: &FixRequest, output: &FixApplyOutput) -> Vec<EvidenceEntry> {
+        let mut evidence = vec![
+            EvidenceEntry::file(format!(
+                "Requested file `{}` was written.",
+                request.path.to_string_lossy().replace('\\', "/")
+            )),
+            EvidenceEntry::model_inference("Model replacement matched the requested path."),
+        ];
+
+        evidence.extend(output.verification_results.iter().map(|result| {
+            let status = if result.succeeded {
+                "succeeded"
+            } else {
+                "failed"
+            };
+            EvidenceEntry::command(format!(
+                "`{}` {status} with exit {}.",
+                result.command,
+                result
+                    .exit_code
+                    .map(|code| code.to_string())
+                    .unwrap_or_else(|| "terminated".into())
+            ))
+        }));
+
+        evidence
     }
 
     fn replacement_for_requested_path<'a>(
@@ -648,8 +701,10 @@ pub mod learn {
     use crate::core::report::LearningOutput;
     use crate::core::task::{LearningRecord, TaskId};
     use crate::memory::jsonl::JsonlMemoryStore;
-    use crate::report::markdown::{render_learning, render_learning_report, ReportMeta};
-    use crate::tools::fs::ProjectFs;
+    use crate::report::markdown::{
+        render_learning, render_learning_report, rule_hits_from_sources, EvidenceEntry, ReportMeta,
+    };
+    use crate::tools::fs::{ProjectFile, ProjectFs};
     use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
     use anyhow::{bail, Result};
 
@@ -723,7 +778,8 @@ pub mod learn {
 
             let meta = ReportMeta {
                 task_id,
-                evidence: output.evidence.clone(),
+                evidence: learning_evidence(source_report.as_ref(), &output),
+                rule_hits: rule_hits_from_sources(&context.sources),
                 next_actions: vec![
                     "Next stage: run `ai-human ask`, `ai-human plan`, or `ai-human review` to reuse this knowledge.".into(),
                     "Review the Markdown entry before treating it as a team rule.".into(),
@@ -744,6 +800,36 @@ pub mod learn {
                 markdown,
             })
         }
+    }
+
+    fn learning_evidence(
+        source_report: Option<&ProjectFile>,
+        output: &LearningOutput,
+    ) -> Vec<EvidenceEntry> {
+        let mut evidence = Vec::new();
+
+        if let Some(report) = source_report {
+            evidence.push(EvidenceEntry::history_report(format!(
+                "Source report `{}` loaded.",
+                report.display_path
+            )));
+        }
+
+        evidence.extend(
+            output
+                .evidence
+                .iter()
+                .cloned()
+                .map(EvidenceEntry::model_inference),
+        );
+
+        if evidence.is_empty() {
+            evidence.push(EvidenceEntry::user_input(
+                "Learning input supplied directly by user.",
+            ));
+        }
+
+        evidence
     }
 
     fn learning_target_doc(
@@ -817,7 +903,9 @@ pub mod review {
     use crate::core::report::ReviewOutput;
     use crate::core::task::{ReviewRecord, TaskId};
     use crate::memory::jsonl::JsonlMemoryStore;
-    use crate::report::markdown::{render_review_report, ReportMeta};
+    use crate::report::markdown::{
+        render_review_report, rule_hits_from_sources, EvidenceEntry, ReportMeta,
+    };
     use crate::workflow::{report_display_path, report_path, write_report, WorkflowReport};
     use anyhow::{bail, Context, Result};
     use tokio::fs;
@@ -889,7 +977,8 @@ pub mod review {
                 .await?;
             let meta = ReportMeta {
                 task_id: task_id.clone(),
-                evidence: vec!["Source: review input and project context.".into()],
+                evidence: review_evidence(review_input),
+                rule_hits: rule_hits_from_sources(&context.sources),
                 next_actions: review_next_actions(&output),
             };
             let markdown = render_review_report(&output, &meta);
@@ -948,6 +1037,26 @@ Return only JSON matching this schema:
                 "No blocking findings; keep standard verification before delivery.".into(),
             ]
         }
+    }
+
+    fn review_evidence(review_input: &str) -> Vec<EvidenceEntry> {
+        let first_line = review_input.lines().next().unwrap_or_default().trim();
+        let mut evidence = if let Some(source) = first_line.strip_prefix("FILE: ") {
+            vec![EvidenceEntry::file(format!("Reviewed file `{source}`."))]
+        } else if let Some(source) = first_line.strip_prefix("DIFF FILE: ") {
+            vec![EvidenceEntry::file(format!(
+                "Reviewed diff file `{source}`."
+            ))]
+        } else {
+            vec![EvidenceEntry::user_input(
+                "Review input supplied directly by user.",
+            )]
+        };
+
+        evidence.push(EvidenceEntry::project_context(
+            "Repository knowledge and path hints loaded.",
+        ));
+        evidence
     }
 
     async fn read_project_file(
