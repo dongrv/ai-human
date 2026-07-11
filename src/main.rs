@@ -19,8 +19,8 @@ use ai_human::env::load_project_env;
 use ai_human::metrics::{CommandMetric, CommandStatus, MetricsStore};
 use ai_human::provider_error::provider_error_hint;
 use ai_human::task_index::{
-    continuation_from_timeline, render_task_timeline, CompletedTaskReport, Continuation, TaskIndex,
-    TaskTimeline,
+    continuation_from_timeline, evidence_match_counts, render_evidence_query, render_task_timeline,
+    CompletedTaskReport, Continuation, EvidenceFilter, TaskIndex, TaskTimeline,
 };
 use ai_human::workflow::ask::AskWorkflow;
 use ai_human::workflow::doctor::DoctorWorkflow;
@@ -288,6 +288,22 @@ async fn run(cli: Cli) -> Result<CommandOutcome> {
                 report_path: None,
             })
         }
+        Command::Evidence(args) => {
+            load_project_env(&args.project_root)?;
+            let timeline = TaskIndex::new(&args.project_root)
+                .load(&args.task_id)
+                .await?;
+            let filter = EvidenceFilter {
+                kind: args.kind,
+                source: args.source,
+            };
+            println!("{}", render_evidence_query(&timeline, &filter));
+            print_result_summary(evidence_result_summary(&timeline, &filter));
+            Ok(CommandOutcome {
+                task_id: Some(args.task_id),
+                report_path: None,
+            })
+        }
     }
 }
 
@@ -371,6 +387,11 @@ impl MetricContext {
             Command::Task(args) => {
                 Self::new("task", args.project_root.clone(), Some(args.id.clone()))
             }
+            Command::Evidence(args) => Self::new(
+                "evidence",
+                args.project_root.clone(),
+                Some(args.task_id.clone()),
+            ),
             Command::Doctor(args) => Self::new("doctor", args.project_root.clone(), None),
         }
     }
@@ -436,6 +457,31 @@ fn task_result_summary(timeline: &TaskTimeline) -> ResultSummary {
         )
     } else {
         "open the latest report or continue with the listed command".into()
+    };
+
+    ResultSummary {
+        summary,
+        report: "none".into(),
+        next_stage,
+    }
+}
+
+fn evidence_result_summary(timeline: &TaskTimeline, filter: &EvidenceFilter) -> ResultSummary {
+    let (evidence_matches, rule_hit_matches) = evidence_match_counts(timeline, filter);
+    let summary = format!(
+        "{} evidence match(es), {} rule hit match(es).",
+        evidence_matches, rule_hit_matches
+    );
+    let next_stage = if timeline.records.is_empty() {
+        format!(
+            "run `ai-human plan --task-id {} --input \"describe the change\"`",
+            timeline.task_id
+        )
+    } else {
+        format!(
+            "run `ai-human task --id {}` for the full task timeline",
+            timeline.task_id
+        )
     };
 
     ResultSummary {

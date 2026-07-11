@@ -23,6 +23,7 @@ fn root_help_lists_core_commands() {
         .stdout(predicate::str::contains("learn"))
         .stdout(predicate::str::contains("fix"))
         .stdout(predicate::str::contains("task"))
+        .stdout(predicate::str::contains("evidence"))
         .stdout(predicate::str::contains("Check project setup"))
         .stdout(predicate::str::contains("Preview or apply"));
 }
@@ -379,6 +380,49 @@ fn task_command_shows_reports_for_task_id() {
     .stdout(predicate::str::contains(
         "ai-human review --task-id pay-audit-001 --path",
     ));
+}
+
+#[test]
+fn evidence_command_filters_task_evidence_and_rule_hits() {
+    let temp = assert_fs::TempDir::new().unwrap();
+    temp.child(".ai-human/memory/tasks.jsonl")
+        .write_str(
+            r#"{"task_id":"pay-audit-001","task_type":"Plan","repo":"sample","input":"plan payment audit","status":"Completed","started_at":"2026-07-11T00:00:00Z","completed_at":"2026-07-11T00:00:01Z","summary":"Design payment audit.","report_path":".ai-human/reports/pay-audit-001-plan.md","evidence":[{"kind":"Project Context","detail":"Repository knowledge loaded."}],"rule_hits":[{"source":".ai-human/knowledge/engineering-rules.md","detail":"Project engineering rules were included in model context."}]}
+{"task_id":"pay-audit-001","task_type":"CodeReview","repo":"sample","input":"PATH: service/pay/audit.go","status":"Completed","started_at":"2026-07-11T00:00:02Z","completed_at":"2026-07-11T00:00:03Z","summary":"Review found a persistence risk.","report_path":".ai-human/reports/pay-audit-001-review.md","evidence":[{"kind":"File","detail":"Reviewed file `service/pay/audit.go`."}],"rule_hits":[]}
+"#,
+        )
+        .unwrap();
+    let mut cmd = Command::cargo_bin("ai-human").unwrap();
+
+    cmd.args([
+        "evidence",
+        "--project-root",
+        temp.path().to_str().unwrap(),
+        "--task-id",
+        "pay-audit-001",
+        "--kind",
+        "file",
+        "--source",
+        "engineering-rules",
+    ])
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("# Evidence pay-audit-001"))
+    .stdout(predicate::str::contains("- Kind: file"))
+    .stdout(predicate::str::contains("- Source: engineering-rules"))
+    .stdout(predicate::str::contains("- Evidence matches: 1"))
+    .stdout(predicate::str::contains("- Rule hit matches: 1"))
+    .stdout(predicate::str::contains(
+        "- review: [File] Reviewed file `service/pay/audit.go`.",
+    ))
+    .stdout(predicate::str::contains(
+        "- plan: [.ai-human/knowledge/engineering-rules.md] Project engineering rules were included in model context.",
+    ))
+    .stdout(predicate::str::contains("## Result Summary"))
+    .stdout(predicate::str::contains(
+        "- Next stage: run `ai-human task --id pay-audit-001` for the full task timeline",
+    ))
+    .stdout(predicate::str::contains("[Project Context] Repository knowledge loaded.").not());
 }
 
 #[test]

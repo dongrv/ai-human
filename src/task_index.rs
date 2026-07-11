@@ -26,6 +26,12 @@ pub struct TaskTimeline {
     pub records: Vec<TaskRecord>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EvidenceFilter {
+    pub kind: Option<String>,
+    pub source: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Continuation {
     ImpactInput {
@@ -160,6 +166,140 @@ pub fn render_task_timeline(timeline: &TaskTimeline) -> String {
     }
 
     markdown
+}
+
+pub fn render_evidence_query(timeline: &TaskTimeline, filter: &EvidenceFilter) -> String {
+    let evidence_matches = matching_evidence(timeline, filter);
+    let rule_hit_matches = matching_rule_hits(timeline, filter);
+    let mut markdown = String::new();
+
+    markdown.push_str(&format!("# Evidence {}\n\n", timeline.task_id));
+    markdown.push_str("## Filters\n\n");
+    markdown.push_str(&format!(
+        "- Kind: {}\n",
+        filter.kind.as_deref().unwrap_or("any")
+    ));
+    markdown.push_str(&format!(
+        "- Source: {}\n\n",
+        filter.source.as_deref().unwrap_or("any")
+    ));
+
+    markdown.push_str("## Summary\n\n");
+    markdown.push_str(&format!("- Task records: {}\n", timeline.records.len()));
+    markdown.push_str(&format!("- Evidence matches: {}\n", evidence_matches.len()));
+    markdown.push_str(&format!(
+        "- Rule hit matches: {}\n\n",
+        rule_hit_matches.len()
+    ));
+
+    markdown.push_str("## Evidence\n\n");
+    if evidence_matches.is_empty() {
+        markdown.push_str("- None matched.\n\n");
+    } else {
+        for (task_type, evidence) in evidence_matches {
+            markdown.push_str(&format!(
+                "- {}: [{}] {}\n",
+                task_type_label(task_type),
+                evidence.kind,
+                evidence.detail
+            ));
+        }
+        markdown.push('\n');
+    }
+
+    markdown.push_str("## Rule Hits\n\n");
+    if rule_hit_matches.is_empty() {
+        markdown.push_str("- None matched.\n\n");
+    } else {
+        for (task_type, hit) in rule_hit_matches {
+            markdown.push_str(&format!(
+                "- {}: [{}] {}\n",
+                task_type_label(task_type),
+                hit.source,
+                hit.detail
+            ));
+        }
+        markdown.push('\n');
+    }
+
+    markdown.push_str("## Next\n\n");
+    if timeline.records.is_empty() {
+        markdown.push_str(&format!(
+            "- Start this task with `ai-human plan --task-id {} --input \"describe the change\"`.\n",
+            timeline.task_id
+        ));
+    } else {
+        markdown.push_str(&format!(
+            "- Run `ai-human task --id {}` for the full task timeline.\n",
+            timeline.task_id
+        ));
+        markdown.push_str("- Adjust `--kind` or `--source` to narrow the evidence view.\n");
+    }
+
+    markdown
+}
+
+pub fn evidence_match_counts(timeline: &TaskTimeline, filter: &EvidenceFilter) -> (usize, usize) {
+    (
+        matching_evidence(timeline, filter).len(),
+        matching_rule_hits(timeline, filter).len(),
+    )
+}
+
+fn matching_evidence<'a>(
+    timeline: &'a TaskTimeline,
+    filter: &EvidenceFilter,
+) -> Vec<(&'a TaskType, &'a EvidenceRecord)> {
+    timeline
+        .records
+        .iter()
+        .flat_map(|record| {
+            record
+                .evidence
+                .iter()
+                .filter(|evidence| matches_kind(&evidence.kind, filter.kind.as_deref()))
+                .map(|evidence| (&record.task_type, evidence))
+        })
+        .collect()
+}
+
+fn matching_rule_hits<'a>(
+    timeline: &'a TaskTimeline,
+    filter: &EvidenceFilter,
+) -> Vec<(&'a TaskType, &'a RuleHitRecord)> {
+    timeline
+        .records
+        .iter()
+        .flat_map(|record| {
+            record
+                .rule_hits
+                .iter()
+                .filter(|hit| matches_source(&hit.source, filter.source.as_deref()))
+                .map(|hit| (&record.task_type, hit))
+        })
+        .collect()
+}
+
+fn matches_kind(value: &str, filter: Option<&str>) -> bool {
+    matches_optional_filter(value, filter)
+}
+
+fn matches_source(value: &str, filter: Option<&str>) -> bool {
+    matches_optional_filter(value, filter)
+}
+
+fn matches_optional_filter(value: &str, filter: Option<&str>) -> bool {
+    let Some(filter) = filter else {
+        return true;
+    };
+    let filter = filter.trim();
+    if filter.is_empty() {
+        return true;
+    }
+
+    value
+        .to_ascii_lowercase()
+        .contains(&filter.to_ascii_lowercase())
 }
 
 fn push_evidence_trail(markdown: &mut String, records: &[TaskRecord]) {

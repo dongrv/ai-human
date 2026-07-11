@@ -124,6 +124,16 @@ cargo run -- task --id pay-audit-001
 
 The task command reads `.ai-human/memory/tasks.jsonl`, prints the reports recorded for that task id, shows the cross-report `Evidence Trail` and `Rule Hits`, and suggests the next continuation step. When enough context is available, it also prints a `Suggested command:` line that can be copied directly, such as `ai-human review --task-id pay-audit-001 --path service/pay/audit.go`. It does not call the model.
 
+Query evidence and rule hits directly:
+
+```powershell
+cargo run -- evidence --task-id pay-audit-001
+cargo run -- evidence --task-id pay-audit-001 --kind File
+cargo run -- evidence --task-id pay-audit-001 --source engineering-rules
+```
+
+The evidence command reads the same local task records and does not call the model. `--kind` filters Evidence entries, and `--source` filters Rule Hits.
+
 Some commands can inherit task context directly:
 
 ```powershell

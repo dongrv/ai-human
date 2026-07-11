@@ -28,6 +28,8 @@ pub enum Command {
     Fix(FixArgs),
     #[command(about = "Show reports and next actions for a task id")]
     Task(TaskArgs),
+    #[command(about = "Query task evidence and rule hits")]
+    Evidence(EvidenceArgs),
     #[command(about = "Check project setup and model configuration")]
     Doctor(DoctorArgs),
 }
@@ -193,4 +195,23 @@ pub struct TaskArgs {
 
     #[arg(long, help = "Task id to inspect")]
     pub id: String,
+}
+
+#[derive(Debug, Args)]
+pub struct EvidenceArgs {
+    #[arg(
+        long,
+        default_value = ".",
+        help = "Project root that owns .ai-human state"
+    )]
+    pub project_root: PathBuf,
+
+    #[arg(long, help = "Task id whose evidence should be queried")]
+    pub task_id: String,
+
+    #[arg(long, help = "Evidence kind filter, for example File or Command")]
+    pub kind: Option<String>,
+
+    #[arg(long, help = "Rule source filter, for example engineering-rules")]
+    pub source: Option<String>,
 }

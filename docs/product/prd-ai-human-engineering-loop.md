@@ -592,16 +592,17 @@ v1 默认对 High 风险阻断 apply。
 - 模型/provider 配置错误已覆盖 `OPENAI_API_KEY` 缺失、不支持的 `AI_HUMAN_MODEL_PROVIDER`、非法 `AI_HUMAN_OPENAI_WIRE_API` 和 endpoint 状态错误的 `Next:` 恢复提示。
 - 主要报告已输出结构化 Evidence 类型标签，覆盖 Project Context、File、History Report、Command、Model Inference、User Input，并新增 `## Rule Hits` 展示命中的团队规则来源。
 - Evidence/Rule Hit 已写入 `.ai-human/memory/tasks.jsonl`，`task --id` 已展示跨报告 `Evidence Trail` 和 `Rule Hits`。
+- `evidence --task-id` 已支持直接查询 Evidence/Rule Hit，并支持 `--kind`、`--source` 过滤。
 
 部分完成：
 
 - 高频可恢复错误已输出 `Next:` 建议，仍需继续细分 provider 网络、认证、限流等运行时错误。
-- 写操作已记录报告路径和验证结果，任务索引已有跨报告证据链展示能力，仍需扩展 Evidence/Rule Hit 的查询、过滤和管理视图。
+- 写操作已记录报告路径和验证结果，任务索引已有跨报告证据链展示和基础查询能力，仍需扩展 Evidence/Rule Hit 的摘要、聚合和管理视图。
 
 待推进：
 
 - 细化 provider 网络、认证、限流等运行时错误分类和恢复建议。
-- 为 Evidence/Rule Hit 增加查询、过滤、摘要和管理视图。
+- 为 Evidence/Rule Hit 增加摘要、聚合和管理视图。
 
 ## 16. 下一步建议
 

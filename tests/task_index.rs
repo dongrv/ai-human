@@ -3,7 +3,8 @@ use chrono::Utc;
 
 use ai_human::core::task::{EvidenceRecord, RuleHitRecord, TaskRecord, TaskStatus, TaskType};
 use ai_human::task_index::{
-    continuation_from_timeline, render_task_timeline, CompletedTaskReport, Continuation, TaskIndex,
+    continuation_from_timeline, render_evidence_query, render_task_timeline, CompletedTaskReport,
+    Continuation, EvidenceFilter, TaskIndex,
 };
 
 #[tokio::test]
@@ -146,6 +147,60 @@ fn renders_task_timeline_with_cross_report_evidence_and_rule_hits() {
     assert!(markdown.contains(
         "- plan: [.ai-human/knowledge/engineering-rules.md] Project engineering rules were included in model context."
     ));
+}
+
+#[test]
+fn renders_evidence_query_with_kind_and_source_filters() {
+    let mut plan = task_record(
+        TaskType::Plan,
+        "plan payment audit",
+        "Design payment audit.",
+        ".ai-human/reports/pay-audit-001-plan.md",
+    );
+    plan.evidence.push(EvidenceRecord {
+        kind: "Project Context".into(),
+        detail: "Repository knowledge loaded.".into(),
+    });
+    plan.rule_hits.push(RuleHitRecord {
+        source: ".ai-human/knowledge/engineering-rules.md".into(),
+        detail: "Project engineering rules were included in model context.".into(),
+    });
+
+    let mut review = task_record(
+        TaskType::CodeReview,
+        "PATH: service/pay/audit.go",
+        "Review found a persistence risk.",
+        ".ai-human/reports/pay-audit-001-review.md",
+    );
+    review.evidence.push(EvidenceRecord {
+        kind: "File".into(),
+        detail: "Reviewed file `service/pay/audit.go`.".into(),
+    });
+
+    let timeline = ai_human::task_index::TaskTimeline {
+        task_id: "pay-audit-001".into(),
+        records: vec![plan, review],
+    };
+
+    let markdown = render_evidence_query(
+        &timeline,
+        &EvidenceFilter {
+            kind: Some("file".into()),
+            source: Some("engineering-rules".into()),
+        },
+    );
+
+    assert!(markdown.starts_with("# Evidence pay-audit-001\n\n"));
+    assert!(markdown.contains("## Filters"));
+    assert!(markdown.contains("- Kind: file"));
+    assert!(markdown.contains("- Source: engineering-rules"));
+    assert!(markdown.contains("- Evidence matches: 1"));
+    assert!(markdown.contains("- Rule hit matches: 1"));
+    assert!(markdown.contains("- review: [File] Reviewed file `service/pay/audit.go`."));
+    assert!(markdown.contains(
+        "- plan: [.ai-human/knowledge/engineering-rules.md] Project engineering rules were included in model context."
+    ));
+    assert!(!markdown.contains("[Project Context] Repository knowledge loaded."));
 }
 
 #[test]
